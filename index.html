@@ -621,14 +621,22 @@
       height: 72px;
       border-top: 1px solid var(--line);
       background: rgba(244, 236, 223, 0.72);
-      display: flex;
       align-items: center;
-      justify-content: space-between;
       padding: 0 20px;
       gap: 8px;
     }
+    footer.footer-card {
+      display: grid;
+      grid-template-columns: 52px 1fr 52px;
+    }
+    footer.footer-static {
+      display: flex;
+      justify-content: center;
+    }
     .nav-btn { font-size: 26px; font-weight: 900; color: var(--primary-deep); border-color: rgba(117, 96, 67, 0.18); background: rgba(244,236,223,0.88); }
-    .prog { text-align: center; }
+    .nav-btn:first-child { justify-self: start; }
+    .nav-btn:last-child { justify-self: end; }
+    .prog { text-align: center; justify-self: center; width: 100%; }
     .prog-main { font-size: 28px; font-weight: 800; color: var(--primary-deep); font-family: Menlo, Monaco, monospace; letter-spacing: 0.02em; }
     .prog-sub { font-size: 11px; color: var(--muted); font-weight: 800; }
     .progress-actions {
@@ -1854,23 +1862,96 @@ window.__HEARING_DAY1_21_APP__ = {"source":"/Users/lizhi/Library/Mobile Document
       speak(activeSheetItem.word);
     }
 
-    function normalizeSpeechSpelling(text) {
-      const normalized = String(text || '');
+    function chooseAccentVariant(text) {
+      const value = String(text || '').trim();
+      if (!value.includes('/')) return value;
+      const pairs = {
+        'theatre/theater': { 'en-US': 'theater', 'en-GB': 'theatre' },
+        'neighbour/neighbor': { 'en-US': 'neighbor', 'en-GB': 'neighbour' },
+        'fertilise/fertilize': { 'en-US': 'fertilize', 'en-GB': 'fertilise' },
+        'fertiliser/fertilizer': { 'en-US': 'fertilizer', 'en-GB': 'fertiliser' },
+        'labour/labor': { 'en-US': 'labor', 'en-GB': 'labour' },
+        'ageing/aging': { 'en-US': 'aging', 'en-GB': 'ageing' },
+        'behaviour/behabior': { 'en-US': 'behavior', 'en-GB': 'behaviour' },
+        'car-park/car park': { 'en-US': 'parking lot', 'en-GB': 'car park' },
+        'noticeboard/notice board': { 'en-US': 'notice board', 'en-GB': 'noticeboard' },
+        'hairdryer/hairdrier': { 'en-US': 'hair dryer', 'en-GB': 'hairdryer' },
+        'suncream/sun cream': { 'en-US': 'sunscreen', 'en-GB': 'sun cream' },
+        'healthcare/health care': { 'en-US': 'health care', 'en-GB': 'healthcare' },
+      };
+      const lower = value.toLowerCase();
+      if (pairs[lower]) {
+        return pairs[lower][accent] || pairs[lower]['en-US'] || value;
+      }
+      const parts = value.split('/').map((part) => part.trim()).filter(Boolean);
+      if (parts.length === 2 && parts.every((part) => /^[A-Za-z -]+$/.test(part))) {
+        return accent === 'en-US' ? parts[1] : parts[0];
+      }
+      return value;
+    }
+
+    function normalizeSpeechToken(token) {
+      const lower = String(token || '').toLowerCase();
       const accentMap = accent === 'en-US'
         ? {
             plagiarise: 'plagiarize',
             paralyse: 'paralyze',
             odour: 'odor',
+            behaviour: 'behavior',
+            behaviours: 'behaviors',
+            neighbourhood: 'neighborhood',
+            neighbour: 'neighbor',
+            neighbours: 'neighbors',
+            centre: 'center',
+            centres: 'centers',
+            theatre: 'theater',
+            theatres: 'theaters',
+            metre: 'meter',
+            metres: 'meters',
+            litre: 'liter',
+            litres: 'liters',
+            ageing: 'aging',
+            fertilise: 'fertilize',
+            fertiliser: 'fertilizer',
+            labour: 'labor',
+            programme: 'program',
+            travelling: 'traveling',
+            traveller: 'traveler',
           }
         : {
             plagiarize: 'plagiarise',
             paralyze: 'paralyse',
             odor: 'odour',
+            behavior: 'behaviour',
+            behaviors: 'behaviours',
+            neighborhood: 'neighbourhood',
+            neighbor: 'neighbour',
+            neighbors: 'neighbours',
+            center: 'centre',
+            centers: 'centres',
+            theater: 'theatre',
+            theaters: 'theatres',
+            meter: 'metre',
+            meters: 'metres',
+            liter: 'litre',
+            liters: 'litres',
+            aging: 'ageing',
+            fertilize: 'fertilise',
+            fertilizer: 'fertiliser',
+            labor: 'labour',
+            program: 'programme',
+            traveling: 'travelling',
+            traveler: 'traveller',
           };
+      return accentMap[lower] || token;
+    }
+
+    function normalizeSpeechSpelling(text) {
+      const normalized = chooseAccentVariant(String(text || ''));
       return normalized.replace(/[A-Za-z][A-Za-z'-]*/g, (token) => {
+        const mapped = normalizeSpeechToken(token);
+        if (!mapped || mapped === token) return token;
         const lower = token.toLowerCase();
-        const mapped = accentMap[lower];
-        if (!mapped) return token;
         if (token === lower) return mapped;
         if (token === token.toUpperCase()) return mapped.toUpperCase();
         return mapped.charAt(0).toUpperCase() + mapped.slice(1);
@@ -1879,7 +1960,10 @@ window.__HEARING_DAY1_21_APP__ = {"source":"/Users/lizhi/Library/Mobile Document
 
     function buildNaturalSpeakText(text) {
       return normalizeSpeechSpelling(String(text || ''))
+        .replace(/[–—]/g, '-')
+        .replace(/&/g, ' and ')
         .replace(/\//g, ' ')
+        .replace(/[()[\]{}]/g, ' ')
         .replace(/\s+/g, ' ')
         .replace(/\s*-\s*/g, '-')
         .trim();
@@ -2249,26 +2333,29 @@ window.__HEARING_DAY1_21_APP__ = {"source":"/Users/lizhi/Library/Mobile Document
       if (!voicePool.length) return null;
       const langPrefix = accent === 'en-US' ? 'en-us' : 'en-gb';
       const preferredNames = accent === 'en-US'
-        ? ['ava', 'allison', 'jenny', 'aria', 'samantha', 'emma', 'olivia', 'google us english']
-        : ['libby', 'sonia', 'serena', 'daniel', 'kate', 'hazel', 'google uk english female'];
-      const unwantedHints = ['novelty', 'whisper', 'trinoids', 'zarvox', 'bad news', 'good news', 'hysterical'];
+        ? ['ava', 'allison', 'jenny', 'aria', 'samantha', 'emma', 'olivia', 'karen', 'moira', 'google us english']
+        : ['libby', 'sonia', 'serena', 'daniel', 'kate', 'hazel', 'nicky', 'rishi', 'google uk english female'];
+      const premiumHints = ['enhanced', 'premium', 'natural', 'neural', 'siri', 'compact enhanced'];
+      const unwantedHints = ['novelty', 'whisper', 'trinoids', 'zarvox', 'bad news', 'good news', 'hysterical', 'espeak', 'eloquence', 'festival', 'compact'];
       const scoreVoice = (voice) => {
         const lang = String(voice.lang || '').toLowerCase();
         const name = String(voice.name || '').toLowerCase();
+        const uri = String(voice.voiceURI || '').toLowerCase();
+        const signature = `${name} ${uri}`;
         let score = 0;
         if (lang === langPrefix) score += 90;
         else if (lang.startsWith(langPrefix)) score += 75;
         else if (lang.startsWith('en-')) score += 20;
         if (voice.localService) score += 18;
         if (voice.default) score += 8;
-        if (preferredNames.some(h => name.includes(h))) score += 24;
-        if (name.includes('female')) score += 4;
-        if (name.includes('male')) score -= 3;
-        if (name.includes('premium') || name.includes('enhanced')) score += 8;
-        if (name.includes('google')) score += 10;
-        if (name.includes('natural') || name.includes('neural')) score += 12;
-        if (name.includes('compact') || name.includes('lite')) score -= 8;
-        if (unwantedHints.some(h => name.includes(h))) score -= 60;
+        if (preferredNames.some(h => signature.includes(h))) score += 24;
+        if (signature.includes('female')) score += 4;
+        if (signature.includes('male')) score -= 3;
+        if (premiumHints.some(h => signature.includes(h))) score += 12;
+        if (signature.includes('google')) score += 10;
+        if (signature.includes('online') || signature.includes('cloud')) score -= 5;
+        if (signature.includes('lite')) score -= 8;
+        if (unwantedHints.some(h => signature.includes(h))) score -= 60;
         return score;
       };
       return [...voicePool].sort((a, b) => scoreVoice(b) - scoreVoice(a))[0] || null;
@@ -3150,121 +3237,6 @@ window.__HEARING_DAY1_21_APP__ = {"source":"/Users/lizhi/Library/Mobile Document
       stopSpeaking();
     }
 
-    function switchView(mode) {
-      closeSheet();
-      viewMode = mode;
-      document.getElementById('card-view').style.display = mode === 'card' ? 'flex' : 'none';
-      document.getElementById('list-view').style.display = mode === 'list' ? 'flex' : 'none';
-      document.getElementById('review-view').style.display = mode === 'review' ? 'flex' : 'none';
-      document.getElementById('main-footer').style.display = 'flex';
-      document.getElementById('prev-btn').style.display = mode === 'card' ? '' : 'none';
-      document.getElementById('next-btn').style.display = mode === 'card' ? '' : 'none';
-      document.getElementById('tab-card').classList.toggle('active', mode === 'card');
-      document.getElementById('tab-list').classList.toggle('active', mode === 'list');
-      document.getElementById('tab-review').classList.toggle('active', mode === 'review');
-      if (mode === 'list') {
-        listPage = Math.floor(curIdx / perPage);
-        renderList();
-      } else if (mode === 'review') {
-        resetReviewDeck();
-      } else {
-        render({ autoplay: false });
-      }
-    }
-
-    function renderList() {
-      const start = listPage * perPage;
-      const items = curList.slice(start, start + perPage);
-      const host = document.getElementById('list-items');
-      if (!items.length) {
-        host.innerHTML = `
-          <div class="list-row v2-list-row">
-            <div class="v2-list-meta">
-              <div class="list-word">未找到匹配词</div>
-              <div class="list-mean">请换一个关键词，或清空搜索恢复全部词卡。</div>
-            </div>
-            <div class="list-syn">搜索支持主词、中文义、替换词</div>
-          </div>
-        `;
-        document.getElementById('page-num').innerText = '0 / 0';
-        host.scrollTop = 0;
-        return;
-      }
-      host.innerHTML = items.map((it, i) => {
-        const replPreview = parseSynonyms(it.synonym_raw).join(', ');
-        return `
-          <button class="list-row v2-list-row" onclick="jumpTo(${start + i})" aria-label="打开 ${sanitizeHTML(it.word)}">
-            <div class="v2-list-meta">
-              <div class="list-word">${sanitizeHTML(it.word)}</div>
-              <div class="list-mean">${sanitizeHTML(it.meaning_cn || '（中文释义待校验）')}</div>
-            </div>
-            <div class="list-syn">替换词: ${sanitizeHTML(replPreview || '暂无')}</div>
-          </button>
-        `;
-      }).join('');
-      document.getElementById('page-num').innerText = `${listPage + 1} / ${Math.max(1, Math.ceil(curList.length / perPage))}`;
-      host.scrollTop = 0;
-    }
-
-    function jumpTo(idx) {
-      curIdx = idx;
-      switchView('card');
-      render({ autoplay: true });
-      updateProgress();
-    }
-
-    function speakListWord(idx) {
-      const item = curList[idx];
-      if (!item) return;
-      speak(item.word);
-    }
-
-    function changePage(step) {
-      const max = Math.ceil(curList.length / perPage);
-      const next = listPage + step;
-      if (next < 0 || next >= max) return;
-      listPage = next;
-      renderList();
-    }
-
-    function onSearch() {
-      const q = document.getElementById('search').value.trim().toLowerCase();
-      if (!q) {
-        curList = [...coreData];
-      } else {
-        curList = coreData.filter(it => {
-          const base = [it.word, it.meaning_cn, it.meaning_en, it.root_memory, it.synonym_raw].join(' ').toLowerCase();
-          if (base.includes(q)) return true;
-          const anchoredReplacements = replacementByCoreId.get(it.id) || [];
-          const replWords = parseSynonyms(it.synonym_raw).join(' ').toLowerCase();
-          if (replWords.includes(q)) return true;
-          return anchoredReplacements.some(repl => {
-            const replacementBase = [
-              repl.word,
-              repl.meaning_cn,
-              repl.meaning_en,
-              repl.root_memory,
-              repl.ielts_example,
-              Array.isArray(repl.phrases) ? repl.phrases.join(' ') : '',
-            ].join(' ').toLowerCase();
-            return replacementBase.includes(q);
-          });
-        });
-      }
-      curIdx = 0;
-      listPage = 0;
-      if (viewMode === 'card') render({ autoplay: false });
-      else if (viewMode === 'list') renderList();
-      else resetReviewDeck();
-      updateProgress();
-    }
-
-    function updateProgress() {
-      const total = curList.length;
-      const shown = total ? curIdx + 1 : 0;
-      document.getElementById('progress').innerText = `${shown} / ${total}`;
-    }
-
     function normalizeHearingRecord(item, index) {
       const day = Number(item && item.day) || 0;
       const order = Number(item && item.order);
@@ -3313,6 +3285,7 @@ window.__HEARING_DAY1_21_APP__ = {"source":"/Users/lizhi/Library/Mobile Document
       const baseList = getSearchMatchedRecords();
       curList = baseList
         .filter(it => selectedDays.has(Number(it.day)))
+        .filter(matchesReviewStatus)
         .sort((a, b) => (a.order - b.order) || (a.day - b.day));
       if (!preserveIndex || curIdx >= curList.length) curIdx = 0;
       listPage = Math.floor(curIdx / perPage) || 0;
@@ -3344,11 +3317,12 @@ window.__HEARING_DAY1_21_APP__ = {"source":"/Users/lizhi/Library/Mobile Document
       const host = document.getElementById('review-filter-grid');
       if (!host) return;
       const baseList = getSearchMatchedRecords();
+      const scopedList = baseList.filter(matchesReviewStatus);
       const dayCounts = new Map();
       for (const day of availableDays) {
-        dayCounts.set(day, baseList.filter(item => Number(item.day) === day).length);
+        dayCounts.set(day, scopedList.filter(item => Number(item.day) === day).length);
       }
-      const allCount = baseList.length;
+      const allCount = scopedList.length;
       const statusCounts = getStatusCounts(baseList);
       host.innerHTML = `
         <div class="review-filter-section">
@@ -3382,11 +3356,12 @@ window.__HEARING_DAY1_21_APP__ = {"source":"/Users/lizhi/Library/Mobile Document
       const statusHost = document.getElementById('list-status-grid');
       if (!host || !statusHost) return;
       const baseList = getSearchMatchedRecords();
+      const scopedList = baseList.filter(matchesReviewStatus);
       const dayCounts = new Map();
       for (const day of availableDays) {
-        dayCounts.set(day, baseList.filter(item => Number(item.day) === day).length);
+        dayCounts.set(day, scopedList.filter(item => Number(item.day) === day).length);
       }
-      const allCount = baseList.length;
+      const allCount = scopedList.length;
       const statusCounts = getStatusCounts(baseList);
       statusHost.innerHTML = buildStatusFilterMarkup('list', statusCounts);
       host.innerHTML = `
@@ -3974,6 +3949,56 @@ window.__HEARING_DAY1_21_APP__ = {"source":"/Users/lizhi/Library/Mobile Document
       }).join('');
       document.getElementById('page-num').innerText = `${listPage + 1} / ${Math.max(1, Math.ceil(curList.length / perPage))}`;
       host.scrollTop = 0;
+    }
+
+    function switchView(mode) {
+      closeSheet();
+      viewMode = mode;
+      const navVisible = mode === 'card';
+      const prevBtn = document.getElementById('prev-btn');
+      const nextBtn = document.getElementById('next-btn');
+      document.getElementById('card-view').style.display = mode === 'card' ? 'flex' : 'none';
+      document.getElementById('list-view').style.display = mode === 'list' ? 'flex' : 'none';
+      document.getElementById('review-view').style.display = mode === 'review' ? 'flex' : 'none';
+      const footer = document.getElementById('main-footer');
+      footer.classList.toggle('footer-card', navVisible);
+      footer.classList.toggle('footer-static', !navVisible);
+      prevBtn.style.display = navVisible ? 'inline-flex' : 'none';
+      nextBtn.style.display = navVisible ? 'inline-flex' : 'none';
+      prevBtn.style.pointerEvents = navVisible ? 'auto' : 'none';
+      nextBtn.style.pointerEvents = navVisible ? 'auto' : 'none';
+      document.getElementById('tab-card').classList.toggle('active', mode === 'card');
+      document.getElementById('tab-list').classList.toggle('active', mode === 'list');
+      document.getElementById('tab-review').classList.toggle('active', mode === 'review');
+      if (mode === 'list') {
+        listPage = Math.floor(curIdx / perPage) || 0;
+        renderList();
+      } else if (mode === 'review') {
+        resetReviewDeck();
+      } else {
+        render({ autoplay: false });
+      }
+    }
+
+    function jumpTo(idx) {
+      curIdx = idx;
+      switchView('card');
+      render({ autoplay: true });
+      updateProgress();
+    }
+
+    function speakListWord(idx) {
+      const item = curList[idx];
+      if (!item) return;
+      speak(item.word);
+    }
+
+    function changePage(step) {
+      const max = Math.ceil(curList.length / perPage);
+      const next = listPage + step;
+      if (next < 0 || next >= max) return;
+      listPage = next;
+      renderList();
     }
 
     function onSearch() {
