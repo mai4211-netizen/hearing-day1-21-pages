@@ -342,11 +342,14 @@
       font-size: 12px;
       font-weight: 900;
       box-shadow: none;
+      transition: transform 160ms ease, background-color 160ms ease, border-color 160ms ease, color 160ms ease, box-shadow 160ms ease;
     }
     .status-btn.active {
       background: var(--primary-deep);
       color: var(--card);
       border-color: var(--primary-deep);
+      transform: translateY(-1px) scale(1.03);
+      box-shadow: 0 8px 18px rgba(54, 38, 22, 0.12);
     }
     .card-familiar-btn {
       position: absolute;
@@ -363,11 +366,14 @@
       font-size: 12px;
       font-weight: 900;
       box-shadow: none;
+      transition: transform 160ms ease, background-color 160ms ease, border-color 160ms ease, color 160ms ease, box-shadow 160ms ease;
     }
     .card-familiar-btn.active {
       background: var(--primary-deep);
       color: var(--card);
       border-color: var(--primary-deep);
+      transform: translateY(-1px) scale(1.03);
+      box-shadow: 0 8px 18px rgba(54, 38, 22, 0.12);
     }
     .card-familiar-btn.card-familiar-floating {
       z-index: 6;
@@ -1539,7 +1545,7 @@
       }
     }
   </style>
-  <meta name="hearing-build-stamp" content="2026-04-09 13:54:27 +0800">
+  <meta name="hearing-build-stamp" content="2026-04-09 16:15:28 +0800">
 </head>
 <body class="v2-shell v2-only hearing-day-app">
   <div id="speech-unlock-overlay" class="speech-unlock-overlay hidden" role="dialog" aria-modal="true" aria-label="解锁发音">
@@ -1569,7 +1575,7 @@
   <main>
     <section id="card-view" aria-live="polite">
       <div class="card-wrap v2-card-wrap">
-        <button id="card-familiar-btn" class="card-familiar-btn card-familiar-floating" type="button">熟</button>
+        <button id="card-familiar-btn" class="card-familiar-btn card-familiar-floating" type="button">未熟</button>
         <div class="card" id="main-card">
           <article class="face front v2-card-face">
             <div class="front-top-row">
@@ -1670,14 +1676,14 @@ window.__HEARING_DAY1_21_APP__ = {"source":"/Users/lizhi/Library/Mobile Document
     let activeAudio = null;
     let reviewAllDays = true;
     let reviewDayFilters = new Set();
-    let familiarWords = new Set();
+    let unfamiliarWords = new Set();
     let reviewStatusFilters = {
       unfamiliar: true,
       familiar: false,
     };
     let searchQuery = '';
-    const FAMILIAR_STORAGE_KEY = 'hearing_day1_21_app_familiar_words_v2';
-    const FAMILIAR_WORDS_KEY = FAMILIAR_STORAGE_KEY;
+    const UNFAMILIAR_STORAGE_KEY = 'hearing_day1_21_app_unfamiliar_words_v3';
+    const UNFAMILIAR_WORDS_KEY = UNFAMILIAR_STORAGE_KEY;
 
     let accent = 'en-US';
     let speechUnlocked = false;
@@ -1881,29 +1887,29 @@ window.__HEARING_DAY1_21_APP__ = {"source":"/Users/lizhi/Library/Mobile Document
       return '';
     }
 
-    function loadFamiliarWords() {
+    function loadUnfamiliarWords() {
       try {
-        const raw = localStorage.getItem(FAMILIAR_WORDS_KEY);
+        const raw = localStorage.getItem(UNFAMILIAR_WORDS_KEY);
         if (!raw) return new Set();
         const parsed = JSON.parse(raw);
         if (!Array.isArray(parsed)) return new Set();
         return new Set(parsed.map(normalizeWordKey).filter(Boolean));
       } catch (err) {
-        console.warn('failed to load familiar words', err);
+        console.warn('failed to load unfamiliar words', err);
         return new Set();
       }
     }
 
-    function saveFamiliarWords() {
+    function saveUnfamiliarWords() {
       try {
-        localStorage.setItem(FAMILIAR_WORDS_KEY, JSON.stringify([...familiarWords].sort()));
+        localStorage.setItem(UNFAMILIAR_WORDS_KEY, JSON.stringify([...unfamiliarWords].sort()));
       } catch (err) {
-        console.warn('failed to save familiar words', err);
+        console.warn('failed to save unfamiliar words', err);
       }
     }
 
-    function isWordFamiliar(word) {
-      return familiarWords.has(normalizeWordKey(word));
+    function isWordUnfamiliar(word) {
+      return unfamiliarWords.has(normalizeWordKey(word));
     }
 
     function stopActiveAudio() {
@@ -1919,33 +1925,35 @@ window.__HEARING_DAY1_21_APP__ = {"source":"/Users/lizhi/Library/Mobile Document
     }
 
     function syncCardFamiliarUI(item = curList[curIdx]) {
-      const familiar = !!(item && isWordFamiliar(item.word));
+      const unfamiliar = !!(item && isWordUnfamiliar(item.word));
       const familiarBtn = document.getElementById('card-familiar-btn');
       if (!familiarBtn) return;
-      familiarBtn.classList.toggle('active', familiar);
-      familiarBtn.setAttribute('aria-pressed', String(familiar));
-      familiarBtn.title = familiar ? '再次点击标记为未熟' : '点击标记为已熟';
+      familiarBtn.classList.toggle('active', unfamiliar);
+      familiarBtn.setAttribute('aria-pressed', String(unfamiliar));
+      familiarBtn.innerText = '未熟';
+      familiarBtn.title = unfamiliar ? '再次点击标记为已熟' : '点击标记为未熟';
     }
 
     function syncReviewFamiliarButton(card) {
       const familiarBtn = document.getElementById('review-familiar-btn');
       if (!familiarBtn || !card) return;
-      const familiar = isWordFamiliar(card.word);
-      familiarBtn.classList.toggle('active', familiar);
-      familiarBtn.setAttribute('aria-pressed', String(familiar));
-      familiarBtn.title = familiar ? '再次点击标记为未熟' : '点击标记为已熟';
+      const unfamiliar = isWordUnfamiliar(card.word);
+      familiarBtn.classList.toggle('active', unfamiliar);
+      familiarBtn.setAttribute('aria-pressed', String(unfamiliar));
+      familiarBtn.innerText = '未熟';
+      familiarBtn.title = unfamiliar ? '再次点击标记为已熟' : '点击标记为未熟';
     }
 
-    function setWordFamiliarState(word, familiar, options = {}) {
+    function setWordUnfamiliarState(word, unfamiliar, options = {}) {
       const key = normalizeWordKey(word);
       if (!key) return;
-      if (familiar) familiarWords.add(key);
-      else familiarWords.delete(key);
-      saveFamiliarWords();
+      if (unfamiliar) unfamiliarWords.add(key);
+      else unfamiliarWords.delete(key);
+      saveUnfamiliarWords();
       if (viewMode === 'review') {
         const currentCard = reviewDeck[reviewIndex];
         const currentKey = currentCard ? normalizeWordKey(currentCard.word) : '';
-        const shouldAdvance = familiar && options.advanceReview !== false;
+        const shouldAdvance = unfamiliar && options.advanceReview !== false;
         if (shouldAdvance && currentKey === key) {
           const nextIndex = reviewIndex + 1;
           if (nextIndex < reviewDeck.length) {
@@ -3605,10 +3613,10 @@ window.__HEARING_DAY1_21_APP__ = {"source":"/Users/lizhi/Library/Mobile Document
     }
 
     function getStatusCounts(baseList) {
-      const familiarCount = baseList.filter(item => isWordFamiliar(item.word)).length;
+      const unfamiliarCount = baseList.filter(item => isWordUnfamiliar(item.word)).length;
       return {
-        familiar: familiarCount,
-        unfamiliar: baseList.length - familiarCount,
+        familiar: baseList.length - unfamiliarCount,
+        unfamiliar: unfamiliarCount,
       };
     }
 
@@ -3749,10 +3757,10 @@ window.__HEARING_DAY1_21_APP__ = {"source":"/Users/lizhi/Library/Mobile Document
     }
 
     function matchesReviewStatus(item) {
-      const familiar = isWordFamiliar(item && item.word);
+      const unfamiliar = isWordUnfamiliar(item && item.word);
       if (reviewStatusFilters.unfamiliar && reviewStatusFilters.familiar) return true;
-      if (reviewStatusFilters.unfamiliar) return !familiar;
-      if (reviewStatusFilters.familiar) return familiar;
+      if (reviewStatusFilters.unfamiliar) return unfamiliar;
+      if (reviewStatusFilters.familiar) return !unfamiliar;
       return false;
     }
 
@@ -3787,7 +3795,7 @@ window.__HEARING_DAY1_21_APP__ = {"source":"/Users/lizhi/Library/Mobile Document
         e.stopPropagation();
         const it = curList[curIdx];
         if (!it) return;
-        setWordFamiliarState(it.word, !isWordFamiliar(it.word), { rerenderCard: false });
+        setWordUnfamiliarState(it.word, !isWordUnfamiliar(it.word), { rerenderCard: false });
       });
 
       document.getElementById('main-card').addEventListener('click', (e) => {
@@ -4048,7 +4056,7 @@ window.__HEARING_DAY1_21_APP__ = {"source":"/Users/lizhi/Library/Mobile Document
                 <div class="review-front-top">
                   <div class="review-card-meta">${sanitizeHTML(card.category || `Day ${card.day || ''}`)}</div>
                   <div class="review-top-actions">
-                    <button id="review-familiar-btn" class="status-btn" type="button">熟</button>
+                    <button id="review-familiar-btn" class="status-btn" type="button">未熟</button>
                   </div>
                 </div>
                 <div class="review-word-row">
@@ -4103,7 +4111,7 @@ window.__HEARING_DAY1_21_APP__ = {"source":"/Users/lizhi/Library/Mobile Document
         if (familiarBtn) {
           familiarBtn.addEventListener('click', (e) => {
             e.stopPropagation();
-            setWordFamiliarState(card.word, !isWordFamiliar(card.word), { advanceReview: false });
+            setWordUnfamiliarState(card.word, !isWordUnfamiliar(card.word), { advanceReview: false });
           });
         }
         syncReviewFamiliarButton(card);
@@ -4137,7 +4145,7 @@ window.__HEARING_DAY1_21_APP__ = {"source":"/Users/lizhi/Library/Mobile Document
               <div class="review-front-top">
                 <div class="review-card-meta">${sanitizeHTML(card.category || `Day ${card.day || ''}`)}</div>
                 <div class="review-top-actions">
-                  <button id="review-familiar-btn" class="status-btn" type="button">熟</button>
+                  <button id="review-familiar-btn" class="status-btn" type="button">未熟</button>
                   <button id="review-word-btn" class="review-icon-btn" aria-label="再次发音 ${sanitizeHTML(card.word || 'word')}">🔊</button>
                 </div>
               </div>
@@ -4186,7 +4194,7 @@ window.__HEARING_DAY1_21_APP__ = {"source":"/Users/lizhi/Library/Mobile Document
       if (familiarBtn) {
         familiarBtn.addEventListener('click', (e) => {
           e.stopPropagation();
-          setWordFamiliarState(card.word, !isWordFamiliar(card.word), { advanceReview: false });
+          setWordUnfamiliarState(card.word, !isWordUnfamiliar(card.word), { advanceReview: false });
         });
       }
       syncReviewFamiliarButton(card);
@@ -4358,9 +4366,9 @@ window.__HEARING_DAY1_21_APP__ = {"source":"/Users/lizhi/Library/Mobile Document
     function exportProgressState() {
       return {
         app: 'hearing_day1_21',
-        version: 1,
+        version: 2,
         exported_at: new Date().toISOString(),
-        familiar_words: Array.from(familiarWords).map(normalizeWordKey).filter(Boolean).sort(),
+        unfamiliar_words: Array.from(unfamiliarWords).map(normalizeWordKey).filter(Boolean).sort(),
       };
     }
 
@@ -4387,20 +4395,31 @@ window.__HEARING_DAY1_21_APP__ = {"source":"/Users/lizhi/Library/Mobile Document
       if (!payload || payload.app !== 'hearing_day1_21') {
         throw new Error('导入失败：不是 Day1-21 项目的进度文件。');
       }
-      if (payload.version !== 1) {
+      if (payload.version === 2) {
+        if (!Array.isArray(payload.unfamiliar_words)) {
+          throw new Error('导入失败：生词列表格式不正确。');
+        }
+        return payload.unfamiliar_words.map(normalizeWordKey).filter(Boolean);
+      }
+      if (payload.version === 1) {
+        if (!Array.isArray(payload.familiar_words)) {
+          throw new Error('导入失败：熟悉词列表格式不正确。');
+        }
+        const familiarSet = new Set(payload.familiar_words.map(normalizeWordKey).filter(Boolean));
+        const allWords = Array.from(new Set(hearingRecords.map(item => normalizeWordKey(item.word)).filter(Boolean)));
+        return allWords.filter(word => !familiarSet.has(word));
+      }
+      if (payload.version !== 2) {
         throw new Error('导入失败：进度文件版本不受支持。');
       }
-      if (!Array.isArray(payload.familiar_words)) {
-        throw new Error('导入失败：熟悉词列表格式不正确。');
-      }
-      return payload.familiar_words.map(normalizeWordKey).filter(Boolean);
+      return [];
     }
 
     function applyImportedProgress(words) {
-      // replace familiar state with imported words
-      familiarWords = new Set(words);
-      localStorage.removeItem(FAMILIAR_WORDS_KEY);
-      localStorage.setItem(FAMILIAR_WORDS_KEY, JSON.stringify(Array.from(familiarWords)));
+      // replace unfamiliar state with imported words
+      unfamiliarWords = new Set(words);
+      localStorage.removeItem(UNFAMILIAR_WORDS_KEY);
+      localStorage.setItem(UNFAMILIAR_WORDS_KEY, JSON.stringify(Array.from(unfamiliarWords)));
       rerenderAllViews();
     }
 
@@ -4419,7 +4438,7 @@ window.__HEARING_DAY1_21_APP__ = {"source":"/Users/lizhi/Library/Mobile Document
           .map((item, index) => normalizeHearingRecord(item, index))
           .sort((a, b) => (a.order - b.order) || (a.day - b.day));
         availableDays = [...new Set(hearingRecords.map(item => Number(item.day)).filter(Boolean))].sort((a, b) => a - b);
-        familiarWords = loadFamiliarWords();
+        unfamiliarWords = loadUnfamiliarWords();
         reviewAllDays = true;
         reviewDayFilters = new Set(availableDays);
         coreData = [...hearingRecords];
@@ -4442,6 +4461,6 @@ window.__HEARING_DAY1_21_APP__ = {"source":"/Users/lizhi/Library/Mobile Document
 
     init();
   </script>
-  <!-- hearing-build-stamp: 2026-04-09 13:54:27 +0800 -->
+  <!-- hearing-build-stamp: 2026-04-09 16:15:28 +0800 -->
 </body>
 </html>
