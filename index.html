@@ -324,6 +324,9 @@
       color: var(--card);
       border-color: var(--primary-deep);
     }
+    .card-familiar-btn.card-familiar-floating {
+      z-index: 6;
+    }
     .ghost-pill {
       border: 1px solid rgba(117, 96, 67, 0.2);
       background: rgba(237, 228, 211, 0.72);
@@ -618,6 +621,9 @@
     }
 
     footer {
+      display: grid;
+      grid-template-columns: 52px minmax(0, 1fr) 52px;
+      justify-items: center;
       height: 72px;
       border-top: 1px solid var(--line);
       background: rgba(244, 236, 223, 0.72);
@@ -626,17 +632,28 @@
       gap: 8px;
     }
     footer.footer-card {
-      display: grid;
       grid-template-columns: 52px 1fr 52px;
     }
     footer.footer-static {
-      display: flex;
-      justify-content: center;
+      grid-template-columns: 52px minmax(0, 1fr) 52px;
+    }
+    footer.footer-static .nav-btn {
+      visibility: hidden;
+      pointer-events: none;
     }
     .nav-btn { font-size: 26px; font-weight: 900; color: var(--primary-deep); border-color: rgba(117, 96, 67, 0.18); background: rgba(244,236,223,0.88); }
     .nav-btn:first-child { justify-self: start; }
     .nav-btn:last-child { justify-self: end; }
-    .prog { text-align: center; justify-self: center; width: 100%; }
+    .prog {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      min-width: 0;
+      text-align: center;
+      justify-self: center;
+      width: 100%;
+    }
     .prog-main { font-size: 28px; font-weight: 800; color: var(--primary-deep); font-family: Menlo, Monaco, monospace; letter-spacing: 0.02em; }
     .prog-sub { font-size: 11px; color: var(--muted); font-weight: 800; }
     .progress-actions {
@@ -1478,10 +1495,10 @@
     <section id="card-view" aria-live="polite">
       <div class="card-wrap v2-card-wrap">
         <div class="card" id="main-card">
+          <button id="card-familiar-btn" class="card-familiar-btn card-familiar-floating" type="button">熟</button>
           <article class="face front v2-card-face">
             <div class="front-top-row">
               <div class="category" id="f-cat">DAY</div>
-              <button id="card-familiar-btn" class="card-familiar-btn" type="button">熟</button>
             </div>
             <button id="f-word" class="word-btn" aria-label="重播单词发音">loading</button>
             <div class="ipa-row">
@@ -1605,7 +1622,8 @@ window.__HEARING_DAY1_21_APP__ = {"source":"/Users/lizhi/Library/Mobile Document
     let reviewAnswer = '';
     let reviewLastWrongAnswer = '';
     let reviewAnswerFeedbackHtml = '';
-    let touchStartX = 0;
+    let touchStartX = null;
+    let touchSwipeBlocked = false;
     let wheelLock = false;
     let replacementByWord = new Map();
     let replacementByCoreId = new Map();
@@ -1740,13 +1758,11 @@ window.__HEARING_DAY1_21_APP__ = {"source":"/Users/lizhi/Library/Mobile Document
 
     function syncCardFamiliarUI(item = curList[curIdx]) {
       const familiar = !!(item && isWordFamiliar(item.word));
-      ['card-familiar-btn', 'b-familiar-btn'].forEach((id) => {
-        const familiarBtn = document.getElementById(id);
-        if (!familiarBtn) return;
-        familiarBtn.classList.toggle('active', familiar);
-        familiarBtn.setAttribute('aria-pressed', String(familiar));
-        familiarBtn.title = familiar ? '再次点击标记为未熟' : '点击标记为已熟';
-      });
+      const familiarBtn = document.getElementById('card-familiar-btn');
+      if (!familiarBtn) return;
+      familiarBtn.classList.toggle('active', familiar);
+      familiarBtn.setAttribute('aria-pressed', String(familiar));
+      familiarBtn.title = familiar ? '再次点击标记为未熟' : '点击标记为已熟';
     }
 
     function syncReviewFamiliarButton(card) {
@@ -2317,21 +2333,38 @@ window.__HEARING_DAY1_21_APP__ = {"source":"/Users/lizhi/Library/Mobile Document
 
       document.addEventListener('touchstart', (e) => {
         if (viewMode !== 'card' && viewMode !== 'review') return;
-        if (viewMode === 'review' && e.target.closest('#review-answer-input')) return;
+        const target = e.target;
+        const shouldBlock = !!target && typeof target.closest === 'function' && (
+          target.closest('#review-answer-input')
+          || target.closest('input, textarea, select, button, [contenteditable="true"]')
+        );
+        if (shouldBlock) {
+          touchSwipeBlocked = true;
+          touchStartX = null;
+          return;
+        }
+        touchSwipeBlocked = false;
         touchStartX = e.changedTouches[0].clientX;
       }, { passive: true });
 
       document.addEventListener('touchend', (e) => {
         if (viewMode !== 'card' && viewMode !== 'review') return;
+        if (touchSwipeBlocked || touchStartX === null) {
+          touchSwipeBlocked = false;
+          touchStartX = null;
+          return;
+        }
         const endX = e.changedTouches[0].clientX;
         const delta = touchStartX - endX;
         if (viewMode === 'card') {
           if (delta > 46) navigate(1, 'left');
           if (delta < -46) navigate(-1, 'right');
+          touchStartX = null;
           return;
         }
         if (delta > 46) navigateReview(1, 'left');
         if (delta < -46) navigateReview(-1, 'right');
+        touchStartX = null;
       }, { passive: true });
 
       document.getElementById('review-filter-all').addEventListener('change', (e) => {
@@ -3620,21 +3653,38 @@ window.__HEARING_DAY1_21_APP__ = {"source":"/Users/lizhi/Library/Mobile Document
 
       document.addEventListener('touchstart', (e) => {
         if (viewMode !== 'card' && viewMode !== 'review') return;
-        if (viewMode === 'review' && e.target.closest('#review-answer-input')) return;
+        const target = e.target;
+        const shouldBlock = !!target && typeof target.closest === 'function' && (
+          target.closest('#review-answer-input')
+          || target.closest('input, textarea, select, button, [contenteditable="true"]')
+        );
+        if (shouldBlock) {
+          touchSwipeBlocked = true;
+          touchStartX = null;
+          return;
+        }
+        touchSwipeBlocked = false;
         touchStartX = e.changedTouches[0].clientX;
       }, { passive: true });
 
       document.addEventListener('touchend', (e) => {
         if (viewMode !== 'card' && viewMode !== 'review') return;
+        if (touchSwipeBlocked || touchStartX === null) {
+          touchSwipeBlocked = false;
+          touchStartX = null;
+          return;
+        }
         const endX = e.changedTouches[0].clientX;
         const delta = touchStartX - endX;
         if (viewMode === 'card') {
           if (delta > 46) navigate(1, 'left');
           if (delta < -46) navigate(-1, 'right');
+          touchStartX = null;
           return;
         }
         if (delta > 46) navigateReview(1, 'left');
         if (delta < -46) navigateReview(-1, 'right');
+        touchStartX = null;
       }, { passive: true });
 
       const reviewGrid = document.getElementById('review-filter-grid');
@@ -3733,7 +3783,6 @@ window.__HEARING_DAY1_21_APP__ = {"source":"/Users/lizhi/Library/Mobile Document
       const backDensityClass = getCopyDensityClass([coreView.meaning, coreView.root]);
       const meaningFitClass = getHeadlineFitClass(coreView.meaning);
       const backHtml = `
-        <button id="b-familiar-btn" class="card-familiar-btn" type="button">熟</button>
         <div class="sheet-meaning ${meaningFitClass}">${sanitizeHTML(coreView.meaning || '（中文释义待校验）')}</div>
         <div class="sheet-wordline">
           <button id="b-word" class="sheet-word" aria-label="切换音节显示并播放 ${sanitizeHTML(it.word)}">${sanitizeHTML(it.word)}</button>
@@ -3749,13 +3798,6 @@ window.__HEARING_DAY1_21_APP__ = {"source":"/Users/lizhi/Library/Mobile Document
         backWordBtn.addEventListener('click', (e) => {
           e.stopPropagation();
           toggleBackWordDisplay();
-        });
-      }
-      const backFamiliarBtn = document.getElementById('b-familiar-btn');
-      if (backFamiliarBtn) {
-        backFamiliarBtn.addEventListener('click', (e) => {
-          e.stopPropagation();
-          setWordFamiliarState(it.word, !isWordFamiliar(it.word), { rerenderCard: false });
         });
       }
       syncCardFamiliarUI(it);
@@ -4021,8 +4063,8 @@ window.__HEARING_DAY1_21_APP__ = {"source":"/Users/lizhi/Library/Mobile Document
       const footer = document.getElementById('main-footer');
       footer.classList.toggle('footer-card', navVisible);
       footer.classList.toggle('footer-static', !navVisible);
-      prevBtn.style.display = navVisible ? 'inline-flex' : 'none';
-      nextBtn.style.display = navVisible ? 'inline-flex' : 'none';
+      prevBtn.style.visibility = navVisible ? 'visible' : 'hidden';
+      nextBtn.style.visibility = navVisible ? 'visible' : 'hidden';
       prevBtn.style.pointerEvents = navVisible ? 'auto' : 'none';
       nextBtn.style.pointerEvents = navVisible ? 'auto' : 'none';
       document.getElementById('tab-card').classList.toggle('active', mode === 'card');
