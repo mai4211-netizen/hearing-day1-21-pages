@@ -1545,7 +1545,7 @@
     <div class="speech-unlock-card">
       <div class="speech-unlock-title">点击开始</div>
       <div class="speech-unlock-text">为保证 iPhone 和 iPad 发音稳定，请先点击一次解锁发音。</div>
-      <button id="speech-unlock-btn" class="speech-unlock-btn" type="button">开始并解锁发音</button>
+      <button id="speech-unlock-btn" class="speech-unlock-btn" type="button" onclick="handleSpeechUnlockTap(event)">开始并解锁发音</button>
     </div>
   </div>
   <header>
@@ -1748,16 +1748,7 @@ window.__HEARING_DAY1_21_APP__ = {"source":"/Users/lizhi/Library/Mobile Document
       updateSpeechModeIndicator();
     }
 
-    async function unlockSpeechPlayback() {
-      if (!shouldUseNativeMobileSpeech()) return;
-      if (speechUnlocked) {
-        const unlockOverlay = document.getElementById('speech-unlock-overlay');
-        if (unlockOverlay) unlockOverlay.classList.add('hidden');
-        return;
-      }
-      speechUnlocked = true;
-      const unlockOverlay = document.getElementById('speech-unlock-overlay');
-      if (unlockOverlay) unlockOverlay.classList.add('hidden');
+    async function warmNativeSpeechPlayback() {
       try {
         stopSpeaking();
         if (!window.speechSynthesis) return;
@@ -1781,6 +1772,32 @@ window.__HEARING_DAY1_21_APP__ = {"source":"/Users/lizhi/Library/Mobile Document
       } catch (err) {
         console.warn('speech unlock failed', err);
       }
+    }
+
+    async function unlockSpeechPlayback() {
+      if (!shouldUseNativeMobileSpeech()) return;
+      speechUnlocked = true;
+      const unlockOverlay = document.getElementById('speech-unlock-overlay');
+      if (unlockOverlay) unlockOverlay.classList.add('hidden');
+      updateSpeechModeIndicator();
+      await warmNativeSpeechPlayback();
+    }
+
+    function handleSpeechUnlockTap(event) {
+      if (event) {
+        event.preventDefault();
+        event.stopPropagation();
+      }
+      if (!shouldUseNativeMobileSpeech()) return;
+      speechUnlocked = true;
+      syncSpeechUnlockOverlay();
+      const activeWord = viewMode === 'review'
+        ? (reviewDeck[reviewIdx] && reviewDeck[reviewIdx].word)
+        : (curList[curIdx] && curList[curIdx].word);
+      window.setTimeout(async () => {
+        await warmNativeSpeechPlayback();
+        if (activeWord) playAudioOrSpeak(activeWord);
+      }, 0);
     }
 
     const AUDITED_DETAIL_OVERRIDES = {
@@ -2434,23 +2451,8 @@ window.__HEARING_DAY1_21_APP__ = {"source":"/Users/lizhi/Library/Mobile Document
       const unlockOverlay = document.getElementById('speech-unlock-overlay');
       const unlockButton = document.getElementById('speech-unlock-btn');
       if (unlockOverlay && unlockButton) {
-        const handleUnlock = async () => {
-          await unlockSpeechPlayback();
-          syncSpeechUnlockOverlay();
-          if (viewMode === 'review') {
-            const activeReviewCard = reviewDeck[reviewIdx];
-            if (activeReviewCard) playAudioOrSpeak(activeReviewCard.word);
-            return;
-          }
-          const it = curList[curIdx];
-          if (it) playAudioOrSpeak(it.word);
-        };
-        unlockOverlay.addEventListener('click', async (e) => {
-          if (e.target === unlockOverlay) await handleUnlock();
-        });
-        unlockButton.addEventListener('click', async (e) => {
-          e.stopPropagation();
-          await handleUnlock();
+        unlockOverlay.addEventListener('click', (e) => {
+          if (e.target === unlockOverlay) handleSpeechUnlockTap(e);
         });
       }
 
