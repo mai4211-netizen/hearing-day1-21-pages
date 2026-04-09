@@ -148,10 +148,55 @@
       box-shadow: inset 0 1px 0 rgba(255,255,255,0.3);
     }
 
+    .speech-unlock-overlay {
+      position: fixed;
+      inset: 0;
+      z-index: 30;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 24px;
+      background: rgba(34, 24, 14, 0.46);
+      backdrop-filter: blur(6px);
+    }
+    .speech-unlock-overlay.hidden {
+      display: none;
+    }
+    .speech-unlock-card {
+      width: min(100%, 320px);
+      padding: 22px 20px;
+      border-radius: 22px;
+      border: 1px solid rgba(244, 236, 223, 0.38);
+      background: rgba(244, 236, 223, 0.96);
+      box-shadow: 0 18px 44px rgba(43, 31, 18, 0.22);
+      text-align: center;
+    }
+    .speech-unlock-title {
+      color: var(--primary-deep);
+      font-size: 22px;
+      font-weight: 900;
+      line-height: 1.2;
+    }
+    .speech-unlock-text {
+      margin-top: 10px;
+      color: var(--muted);
+      font-size: 14px;
+      line-height: 1.6;
+    }
+    .speech-unlock-btn {
+      margin-top: 14px;
+      width: 100%;
+      min-height: 46px;
+      background: var(--primary-deep);
+      color: var(--card);
+      border-color: var(--primary-deep);
+      font-weight: 900;
+    }
+
     main { flex: 1; min-height: 0; position: relative; overflow: hidden; }
 
     #card-view { height: 100%; display: flex; align-items: center; justify-content: center; padding: 6px 10px 14px; }
-    .card-wrap { width: min(92vw, 450px); height: min(78vh, 668px); max-height: 668px; perspective: 1500px; }
+    .card-wrap { position: relative; width: min(92vw, 450px); height: min(78vh, 668px); max-height: 668px; perspective: 1500px; }
     .card {
       position: relative;
       width: 100%;
@@ -662,6 +707,22 @@
       justify-content: flex-end;
       gap: 8px;
       margin-top: 8px;
+    }
+    .speech-mode-indicator {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 34px;
+      padding: 0 12px;
+      border-radius: 999px;
+      border: 1px solid rgba(117, 96, 67, 0.18);
+      background: rgba(237, 228, 211, 0.72);
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 900;
+      line-height: 1;
+      user-select: none;
+      white-space: nowrap;
     }
     .progress-btn {
       min-width: auto;
@@ -1327,6 +1388,11 @@
         gap: 6px;
         justify-content: flex-end;
       }
+      .speech-mode-indicator {
+        min-height: 30px;
+        padding: 0 9px;
+        font-size: 11px;
+      }
       .progress-btn {
         min-height: 30px;
         min-width: 0;
@@ -1475,6 +1541,13 @@
   </style>
 </head>
 <body class="v2-shell v2-only hearing-day-app">
+  <div id="speech-unlock-overlay" class="speech-unlock-overlay hidden" role="dialog" aria-modal="true" aria-label="解锁发音">
+    <div class="speech-unlock-card">
+      <div class="speech-unlock-title">点击开始</div>
+      <div class="speech-unlock-text">为保证 iPhone 和 iPad 发音稳定，请先点击一次解锁发音。</div>
+      <button id="speech-unlock-btn" class="speech-unlock-btn" type="button">开始并解锁发音</button>
+    </div>
+  </div>
   <header>
     <div class="head-row">
       <div class="title">21天听力场景词汇</div>
@@ -1485,6 +1558,7 @@
       </div>
     </div>
     <div class="progress-actions">
+      <div id="speech-mode-indicator" class="speech-mode-indicator" aria-live="polite">音频</div>
       <button class="progress-btn" id="progress-export-btn" type="button">导出进度</button>
       <button class="progress-btn" id="progress-import-btn" type="button">导入进度</button>
     </div>
@@ -1494,8 +1568,8 @@
   <main>
     <section id="card-view" aria-live="polite">
       <div class="card-wrap v2-card-wrap">
+        <button id="card-familiar-btn" class="card-familiar-btn card-familiar-floating" type="button">熟</button>
         <div class="card" id="main-card">
-          <button id="card-familiar-btn" class="card-familiar-btn card-familiar-floating" type="button">熟</button>
           <article class="face front v2-card-face">
             <div class="front-top-row">
               <div class="category" id="f-cat">DAY</div>
@@ -1605,6 +1679,7 @@ window.__HEARING_DAY1_21_APP__ = {"source":"/Users/lizhi/Library/Mobile Document
     const FAMILIAR_WORDS_KEY = FAMILIAR_STORAGE_KEY;
 
     let accent = 'en-US';
+    let speechUnlocked = false;
     let voicePool = [];
     let viewMode = 'card';
     let reviewMode = 'en';
@@ -1638,6 +1713,75 @@ window.__HEARING_DAY1_21_APP__ = {"source":"/Users/lizhi/Library/Mobile Document
     let backWordShowsSyllables = false;
     let sheetWordShowsSyllables = false;
     let activeSheetItem = null;
+
+    function isAppleMobileDevice() {
+      const ua = String(navigator.userAgent || '');
+      const platform = String(navigator.platform || '');
+      const touchMac = platform === 'MacIntel' && Number(navigator.maxTouchPoints || 0) > 1;
+      return /iPhone|iPad|iPod/i.test(ua) || touchMac;
+    }
+
+    function shouldUseNativeMobileSpeech() {
+      return isAppleMobileDevice();
+    }
+
+    function getSpeechModeLabel() {
+      return shouldUseNativeMobileSpeech() ? 'native-ios' : 'static-audio';
+    }
+
+    function updateSpeechModeIndicator() {
+      const indicator = document.getElementById('speech-mode-indicator');
+      if (!indicator) return;
+      const modeLabel = shouldUseNativeMobileSpeech() ? '原生' : '音频';
+      indicator.innerText = modeLabel;
+      indicator.dataset.mode = getSpeechModeLabel();
+      indicator.setAttribute('aria-label', `当前发音模式：${modeLabel}`);
+    }
+
+    function syncSpeechUnlockOverlay() {
+      const unlockOverlay = document.getElementById('speech-unlock-overlay');
+      if (!unlockOverlay) return;
+      const shouldShow = shouldUseNativeMobileSpeech() && !speechUnlocked;
+      unlockOverlay.classList.toggle('hidden', !shouldShow);
+      unlockOverlay.setAttribute('aria-hidden', shouldShow ? 'false' : 'true');
+      document.body.dataset.speechMode = getSpeechModeLabel();
+      updateSpeechModeIndicator();
+    }
+
+    async function unlockSpeechPlayback() {
+      if (!shouldUseNativeMobileSpeech()) return;
+      if (speechUnlocked) {
+        const unlockOverlay = document.getElementById('speech-unlock-overlay');
+        if (unlockOverlay) unlockOverlay.classList.add('hidden');
+        return;
+      }
+      speechUnlocked = true;
+      const unlockOverlay = document.getElementById('speech-unlock-overlay');
+      if (unlockOverlay) unlockOverlay.classList.add('hidden');
+      try {
+        stopSpeaking();
+        if (!window.speechSynthesis) return;
+        await new Promise((resolve) => {
+          const utter = new SpeechSynthesisUtterance('ready');
+          utter.lang = accent;
+          utter.volume = 0;
+          utter.rate = 1;
+          utter.pitch = 1;
+          let settled = false;
+          const finish = () => {
+            if (settled) return;
+            settled = true;
+            resolve();
+          };
+          utter.onend = finish;
+          utter.onerror = finish;
+          window.speechSynthesis.speak(utter);
+          window.setTimeout(finish, 220);
+        });
+      } catch (err) {
+        console.warn('speech unlock failed', err);
+      }
+    }
 
     const AUDITED_DETAIL_OVERRIDES = {
       'shyness': {
@@ -2287,6 +2431,29 @@ window.__HEARING_DAY1_21_APP__ = {"source":"/Users/lizhi/Library/Mobile Document
         });
       }
 
+      const unlockOverlay = document.getElementById('speech-unlock-overlay');
+      const unlockButton = document.getElementById('speech-unlock-btn');
+      if (unlockOverlay && unlockButton) {
+        const handleUnlock = async () => {
+          await unlockSpeechPlayback();
+          syncSpeechUnlockOverlay();
+          if (viewMode === 'review') {
+            const activeReviewCard = reviewDeck[reviewIdx];
+            if (activeReviewCard) playAudioOrSpeak(activeReviewCard.word);
+            return;
+          }
+          const it = curList[curIdx];
+          if (it) playAudioOrSpeak(it.word);
+        };
+        unlockOverlay.addEventListener('click', async (e) => {
+          if (e.target === unlockOverlay) await handleUnlock();
+        });
+        unlockButton.addEventListener('click', async (e) => {
+          e.stopPropagation();
+          await handleUnlock();
+        });
+      }
+
       document.addEventListener('keydown', (e) => {
         if (e.target && /input|textarea|select/i.test(e.target.tagName || '')) return;
         if (viewMode === 'card' && e.key === 'ArrowRight') {
@@ -2468,6 +2635,16 @@ window.__HEARING_DAY1_21_APP__ = {"source":"/Users/lizhi/Library/Mobile Document
 
     async function playAudioOrSpeak(text, options = {}) {
       if (!text) return;
+      if (shouldUseNativeMobileSpeech()) {
+        if (!speechUnlocked) {
+          syncSpeechUnlockOverlay();
+          return;
+        }
+        window.__hearingSpeechMode = 'native-ios';
+        speak(text, options);
+        return;
+      }
+      window.__hearingSpeechMode = 'static-audio';
       const audioUrl = accent === 'en-US' ? buildUsAudioPath(text) : '';
       if (audioUrl) {
         try {
@@ -4208,6 +4385,7 @@ window.__HEARING_DAY1_21_APP__ = {"source":"/Users/lizhi/Library/Mobile Document
 
         bindEvents();
         initVoices();
+        syncSpeechUnlockOverlay();
         refreshSharedViews();
         render({ autoplay: true });
         resetReviewDeck();
