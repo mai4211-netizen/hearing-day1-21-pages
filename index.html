@@ -1539,7 +1539,7 @@
       }
     }
   </style>
-  <meta name="hearing-build-stamp" content="2026-04-09 13:47:09 +0800">
+  <meta name="hearing-build-stamp" content="2026-04-09 13:54:27 +0800">
 </head>
 <body class="v2-shell v2-only hearing-day-app">
   <div id="speech-unlock-overlay" class="speech-unlock-overlay hidden" role="dialog" aria-modal="true" aria-label="解锁发音">
@@ -2565,9 +2565,35 @@ window.__HEARING_DAY1_21_APP__ = {"source":"/Users/lizhi/Library/Mobile Document
       if (speechSynthesis.onvoiceschanged !== undefined) {
         speechSynthesis.onvoiceschanged = refresh;
       }
+      if (window.speechSynthesis && window.speechSynthesis.addEventListener) {
+        window.speechSynthesis.addEventListener('voiceschanged', refresh);
+      }
+    }
+
+    function pickIOSVoice() {
+      if (!voicePool.length) return null;
+      const usVoices = voicePool.filter((voice) => String(voice.lang || '').toLowerCase().startsWith('en-us'));
+      if (!usVoices.length) return null;
+      const byName = (name) => usVoices.find((voice) => String(voice.name || '').toLowerCase() === name);
+      const nonCompactVoices = usVoices.filter((voice) => {
+        const name = String(voice.name || '').toLowerCase();
+        const uri = String(voice.voiceURI || '').toLowerCase();
+        return !name.includes('compact') && !uri.includes('compact');
+      });
+      return (
+        byName('samantha')
+        || nonCompactVoices.find((voice) => voice.default)
+        || nonCompactVoices[0]
+        || usVoices.find((voice) => !String(voice.name || '').toLowerCase().includes('compact'))
+        || usVoices[0]
+        || null
+      );
     }
 
     function pickVoice() {
+      if (shouldUseNativeMobileSpeech()) {
+        return pickIOSVoice();
+      }
       if (!voicePool.length) return null;
       const langPrefix = accent === 'en-US' ? 'en-us' : 'en-gb';
       const preferredNames = accent === 'en-US'
@@ -2619,18 +2645,33 @@ window.__HEARING_DAY1_21_APP__ = {"source":"/Users/lizhi/Library/Mobile Document
         const token = activeSpeechToken + 1;
         stopSpeaking();
         activeSpeechToken = token;
-        const voice = pickVoice();
         const spokenText = mode === 'slow' ? buildSlowSpeakText(text) : buildNaturalSpeakText(text);
         const utter = new SpeechSynthesisUtterance(spokenText);
         utter.lang = accent;
         utter.volume = 1;
         utter.rate = mode === 'slow' ? 0.56 : 0.72;
         utter.pitch = mode === 'slow' ? 0.9 : 0.96;
-        if (voice) utter.voice = voice;
-        speakTimer = window.setTimeout(() => {
+        let voice = pickVoice();
+        const delay = mode === 'slow' ? 110 : 70;
+        const performSpeak = () => {
           if (token !== activeSpeechToken) return;
+          if (!utter.voice) {
+            const refreshedVoice = pickVoice();
+            if (refreshedVoice) utter.voice = refreshedVoice;
+          }
           window.speechSynthesis.speak(utter);
-        }, mode === 'slow' ? 110 : 70);
+        };
+        if (voice) utter.voice = voice;
+        if (shouldUseNativeMobileSpeech() && !voice) {
+          initVoices();
+          speakTimer = window.setTimeout(() => {
+            voice = pickVoice();
+            if (voice) utter.voice = voice;
+            performSpeak();
+          }, Math.max(delay, 180));
+          return;
+        }
+        speakTimer = window.setTimeout(performSpeak, delay);
       } catch (err) {
         console.warn('speak failed', err);
       }
@@ -4401,6 +4442,6 @@ window.__HEARING_DAY1_21_APP__ = {"source":"/Users/lizhi/Library/Mobile Document
 
     init();
   </script>
-  <!-- hearing-build-stamp: 2026-04-09 13:47:09 +0800 -->
+  <!-- hearing-build-stamp: 2026-04-09 13:54:27 +0800 -->
 </body>
 </html>
