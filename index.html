@@ -1545,7 +1545,7 @@
       }
     }
   </style>
-  <meta name="hearing-build-stamp" content="2026-04-10 10:34:42 +0800">
+  <meta name="hearing-build-stamp" content="2026-04-10 18:45:22 +0800">
 </head>
 <body class="v2-shell v2-only hearing-day-app">
   <div id="speech-unlock-overlay" class="speech-unlock-overlay hidden" role="dialog" aria-modal="true" aria-label="解锁发音">
@@ -1684,6 +1684,9 @@ window.__HEARING_DAY1_21_APP__ = {"source":"/Users/lizhi/Library/Mobile Document
     let searchQuery = '';
     const UNFAMILIAR_STORAGE_KEY = 'hearing_day1_21_app_unfamiliar_words_v3';
     const UNFAMILIAR_WORDS_KEY = UNFAMILIAR_STORAGE_KEY;
+    const LEGACY_FAMILIAR_STORAGE_KEYS = [
+      'hearing_day1_21_app_familiar_words_v2',
+    ];
 
     let accent = 'en-US';
     let speechUnlocked = false;
@@ -1887,25 +1890,60 @@ window.__HEARING_DAY1_21_APP__ = {"source":"/Users/lizhi/Library/Mobile Document
       return '';
     }
 
-    function loadUnfamiliarWords() {
+    function loadWordSetFromStorage(key) {
       try {
-        const raw = localStorage.getItem(UNFAMILIAR_WORDS_KEY);
+        const raw = localStorage.getItem(key);
         if (!raw) return new Set();
         const parsed = JSON.parse(raw);
         if (!Array.isArray(parsed)) return new Set();
         return new Set(parsed.map(normalizeWordKey).filter(Boolean));
       } catch (err) {
-        console.warn('failed to load unfamiliar words', err);
+        console.warn('failed to load word set', err);
         return new Set();
       }
     }
 
-    function saveUnfamiliarWords() {
+    function saveWordSetToStorage(key, words) {
       try {
-        localStorage.setItem(UNFAMILIAR_WORDS_KEY, JSON.stringify([...unfamiliarWords].sort()));
+        localStorage.setItem(key, JSON.stringify([...words].sort()));
       } catch (err) {
-        console.warn('failed to save unfamiliar words', err);
+        console.warn('failed to save word set', err);
       }
+    }
+
+    function migrateLegacyFamiliarWords() {
+      const current = loadWordSetFromStorage(UNFAMILIAR_WORDS_KEY);
+      if (current.size) return current;
+
+      const allWords = Array.from(new Set(hearingRecords.map(item => normalizeWordKey(item.word)).filter(Boolean)));
+      for (const key of LEGACY_FAMILIAR_STORAGE_KEYS) {
+        const familiarSet = loadWordSetFromStorage(key);
+        if (!familiarSet.size) continue;
+        const migrated = new Set(allWords.filter(word => !familiarSet.has(word)));
+        saveWordSetToStorage(UNFAMILIAR_WORDS_KEY, migrated);
+        try {
+          localStorage.removeItem(key);
+        } catch (err) {
+          console.warn('failed to remove legacy familiar words', err);
+        }
+        document.body.dataset.progressMigratedFrom = key;
+        return migrated;
+      }
+      document.body.dataset.progressMigratedFrom = '';
+      return current;
+    }
+
+    function loadUnfamiliarWords() {
+      const direct = loadWordSetFromStorage(UNFAMILIAR_WORDS_KEY);
+      if (direct.size) {
+        document.body.dataset.progressMigratedFrom = '';
+        return direct;
+      }
+      return migrateLegacyFamiliarWords();
+    }
+
+    function saveUnfamiliarWords() {
+      saveWordSetToStorage(UNFAMILIAR_WORDS_KEY, unfamiliarWords);
     }
 
     function isWordUnfamiliar(word) {
@@ -4461,6 +4499,6 @@ window.__HEARING_DAY1_21_APP__ = {"source":"/Users/lizhi/Library/Mobile Document
 
     init();
   </script>
-  <!-- hearing-build-stamp: 2026-04-10 10:34:42 +0800 -->
+  <!-- hearing-build-stamp: 2026-04-10 18:45:22 +0800 -->
 </body>
 </html>
