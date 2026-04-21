@@ -1616,7 +1616,7 @@
       }
     }
   </style>
-  <meta name="hearing-build-stamp" content="2026-04-14 14:27:45 +0800">
+  <meta name="hearing-build-stamp" content="2026-04-15 18:51:00 +0800">
 </head>
 <body class="v2-shell v2-only hearing-day-app">
   <div id="speech-unlock-overlay" class="speech-unlock-overlay hidden" role="dialog" aria-modal="true" aria-label="解锁发音">
@@ -2113,7 +2113,7 @@ window.__HEARING_DAY1_21_APP__ = {"source":"/Users/lizhi/Library/Mobile Document
         rerenderAllViews();
         return;
       }
-      rerenderAllViews({ autoplay: false });
+      rerenderAllViews({ autoplay: false, preserveListScroll: viewMode === 'list' });
     }
 
     function splitSyllables(word) {
@@ -4350,10 +4350,12 @@ window.__HEARING_DAY1_21_APP__ = {"source":"/Users/lizhi/Library/Mobile Document
       if (options.autoplay) speakReviewWord(card);
     }
 
-    function renderList() {
+    function renderList(options = {}) {
+      const { preserveScroll = false } = options;
       const start = listPage * perPage;
       const items = curList.slice(start, start + perPage);
       const host = document.getElementById('list-items');
+      const previousScrollTop = host ? host.scrollTop : 0;
       if (!items.length) {
         host.innerHTML = `
           <div class="list-row v2-list-row hearing-list-empty">
@@ -4364,7 +4366,7 @@ window.__HEARING_DAY1_21_APP__ = {"source":"/Users/lizhi/Library/Mobile Document
           </div>
         `;
         document.getElementById('page-num').innerText = '0 / 0';
-        host.scrollTop = 0;
+        host.scrollTop = preserveScroll ? 0 : 0;
         return;
       }
       let previousSectionKey = '';
@@ -4394,6 +4396,11 @@ window.__HEARING_DAY1_21_APP__ = {"source":"/Users/lizhi/Library/Mobile Document
         `;
       }).join('');
       document.getElementById('page-num').innerText = `${listPage + 1} / ${Math.max(1, Math.ceil(curList.length / perPage))}`;
+      if (preserveScroll) {
+        const maxScrollTop = Math.max(0, host.scrollHeight - host.clientHeight);
+        host.scrollTop = Math.min(previousScrollTop, maxScrollTop);
+        return;
+      }
       host.scrollTop = 0;
     }
 
@@ -4473,14 +4480,14 @@ window.__HEARING_DAY1_21_APP__ = {"source":"/Users/lizhi/Library/Mobile Document
     }
 
     function rerenderAllViews(options = {}) {
-      const { autoplay = false } = options;
+      const { autoplay = false, preserveListScroll = false } = options;
       refreshSharedViews();
       if (viewMode === 'card') {
         render({ autoplay });
         return;
       }
       if (viewMode === 'list') {
-        renderList();
+        renderList({ preserveScroll: preserveListScroll });
         return;
       }
       resetReviewDeck();
@@ -4586,6 +4593,6 @@ window.__HEARING_DAY1_21_APP__ = {"source":"/Users/lizhi/Library/Mobile Document
 
     init();
   </script>
-  <!-- hearing-build-stamp: 2026-04-14 14:27:45 +0800 -->
+  <!-- hearing-build-stamp: 2026-04-15 18:51:00 +0800 -->
 </body>
 </html>
