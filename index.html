@@ -19,6 +19,7 @@
       --chip-border: rgba(117, 96, 67, 0.22);
       --mustard: #8e7431;
       --shadow: 0 18px 44px rgba(79, 53, 28, 0.14);
+      --font-sans-stack: "PingFang SC", "Helvetica Neue", "Segoe UI", sans-serif;
       --space-1: 4px;
       --space-2: 8px;
       --space-3: 12px;
@@ -49,7 +50,7 @@
     * { box-sizing: border-box; }
     body {
       margin: 0;
-      font-family: "PingFang SC", "Helvetica Neue", "Segoe UI", sans-serif;
+      font-family: var(--font-sans-stack);
       color: var(--text);
       background:
         linear-gradient(180deg, rgba(255,255,255,0.18), rgba(255,255,255,0) 14%),
@@ -94,7 +95,7 @@
     .title {
       position: relative;
       padding-top: 14px;
-      font-family: Baskerville, "Times New Roman", serif;
+      font-family: var(--font-sans-stack);
       font-size: 34px;
       font-weight: 700;
       color: var(--primary-deep);
@@ -269,7 +270,7 @@
       letter-spacing: 0.12em;
       text-align: left;
       text-transform: uppercase;
-      font-family: Menlo, Monaco, monospace;
+      font-family: var(--font-sans-stack);
     }
     .front-top-row {
       display: flex;
@@ -285,7 +286,7 @@
       color: var(--primary-deep);
       border-radius: 0;
       padding: 0;
-      font-family: Baskerville, "Times New Roman", serif;
+      font-family: var(--font-sans-stack);
       font-size: clamp(38px, 7vw, 54px);
       line-height: 0.94;
       font-weight: 700;
@@ -315,7 +316,7 @@
       min-height: auto;
       min-width: auto;
       box-shadow: none;
-      font-family: Menlo, Monaco, monospace;
+      font-family: var(--font-sans-stack);
     }
     .helper-row {
       margin-top: 12px;
@@ -436,7 +437,7 @@
       font-size: 11px;
       font-weight: 800;
       line-height: 1.1;
-      font-family: Menlo, Monaco, monospace;
+      font-family: var(--font-sans-stack);
     }
 
     .back-scroll { overflow: auto; min-height: 0; padding-right: 4px; }
@@ -556,7 +557,7 @@
     .v2-list-row .list-word { font-size: 30px; }
     .v2-list-row .list-mean { font-size: 18px; line-height: 1.38; }
     .list-word {
-      font-family: Baskerville, "Times New Roman", serif;
+      font-family: var(--font-sans-stack);
       font-size: 30px;
       color: var(--primary-deep);
       font-weight: 700;
@@ -577,14 +578,14 @@
     .list-ipa {
       flex: 0 0 auto;
       color: rgba(111, 90, 73, 0.74);
-      font-family: Menlo, Monaco, monospace;
+      font-family: var(--font-sans-stack);
       font-size: 13.2px;
       font-weight: 800;
       letter-spacing: 0.01em;
       white-space: nowrap;
     }
     .list-mean { margin-top: 3px; font-size: 18px; line-height: 1.38; color: var(--primary); font-weight: 700; }
-    .list-syn { margin-top: 8px; color: var(--muted); font-size: 11px; font-weight: 700; line-height: 1.6; font-family: Menlo, Monaco, monospace; }
+    .list-syn { margin-top: 8px; color: var(--muted); font-size: 11px; font-weight: 700; line-height: 1.6; font-family: var(--font-sans-stack); }
     .hearing-day-app .section-title,
     .hearing-day-app #f-repl {
       display: none;
@@ -651,7 +652,7 @@
       font-weight: 900;
       letter-spacing: 0.12em;
       text-transform: uppercase;
-      font-family: Menlo, Monaco, monospace;
+      font-family: var(--font-sans-stack);
     }
     .hearing-list-section-title {
       margin-top: 2px;
@@ -788,7 +789,7 @@
       justify-self: center;
       width: 100%;
     }
-    .prog-main { font-size: 28px; font-weight: 800; color: var(--primary-deep); font-family: Menlo, Monaco, monospace; letter-spacing: 0.02em; }
+    .prog-main { font-size: 28px; font-weight: 800; color: var(--primary-deep); font-family: var(--font-sans-stack); letter-spacing: 0.02em; }
     .prog-sub { font-size: 11px; color: var(--muted); font-weight: 800; }
     .progress-actions {
       display: flex;
@@ -1021,7 +1022,7 @@
       letter-spacing: 0.1em;
       color: var(--muted);
       text-transform: uppercase;
-      font-family: Menlo, Monaco, monospace;
+      font-family: var(--font-sans-stack);
     }
     .review-card-title {
       font-size: 28px;
@@ -1037,7 +1038,7 @@
       padding: 0;
       min-height: auto;
       min-width: auto;
-      font-family: Baskerville, "Times New Roman", serif;
+      font-family: var(--font-sans-stack);
       font-size: clamp(34px, 6vw, 50px);
       font-weight: 700;
       text-align: left;
@@ -1120,7 +1121,7 @@
       padding: 0 4px;
       font-size: 15px;
       font-weight: 900;
-      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+      font-family: var(--font-sans-stack);
     }
     .review-diff-char.hit { background: rgba(233, 226, 209, 0.8); color: #4e4032; }
     .review-diff-char.miss { background: #ffe6ea; color: #b4233b; }
@@ -1232,7 +1233,7 @@
     }
     .review-card-word-back {
       color: var(--primary-deep);
-      font-family: Baskerville, "Times New Roman", serif;
+      font-family: var(--font-sans-stack);
       font-size: 34px;
       font-weight: 700;
       line-height: 1.15;
@@ -1245,7 +1246,7 @@
       font-weight: 800;
       line-height: 1.35;
       word-break: break-word;
-      font-family: Menlo, Monaco, monospace;
+      font-family: var(--font-sans-stack);
     }
     .review-related-module {
       margin-top: 2px;
@@ -1274,7 +1275,7 @@
       font-size: 11px;
       font-weight: 800;
       line-height: 1.2;
-      font-family: Menlo, Monaco, monospace;
+      font-family: var(--font-sans-stack);
     }
     .review-card-subtitle {
       margin-top: 10px;
@@ -1378,7 +1379,7 @@
       min-width: auto;
       box-shadow: none;
       color: var(--primary-deep);
-      font-family: Baskerville, "Times New Roman", serif;
+      font-family: var(--font-sans-stack);
       font-size: 34px;
       font-weight: 700;
       line-height: 1.15;
@@ -1391,7 +1392,7 @@
       font-size: 13px;
       font-weight: 700;
       line-height: 1.55;
-      font-family: Menlo, Monaco, monospace;
+      font-family: var(--font-sans-stack);
     }
     .sheet-meaning {
       color: var(--primary);
@@ -1644,7 +1645,7 @@
       }
     }
   </style>
-  <meta name="hearing-build-stamp" content="2026-04-24 10:15:11 +0800">
+  <meta name="hearing-build-stamp" content="2026-04-27 14:22:25 +0800">
 </head>
 <body class="v2-shell v2-only hearing-day-app">
   <div id="speech-unlock-overlay" class="speech-unlock-overlay hidden" role="dialog" aria-modal="true" aria-label="解锁发音">
@@ -4625,6 +4626,6 @@ window.__HEARING_DAY1_21_APP__ = {"source":"/Users/lizhi/Library/Mobile Document
 
     init();
   </script>
-  <!-- hearing-build-stamp: 2026-04-24 10:15:11 +0800 -->
+  <!-- hearing-build-stamp: 2026-04-27 14:22:25 +0800 -->
 </body>
 </html>
