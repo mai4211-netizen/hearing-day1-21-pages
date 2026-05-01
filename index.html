@@ -567,12 +567,14 @@
     .list-word-line {
       display: flex;
       align-items: baseline;
-      gap: 12px;
+      justify-content: flex-start;
+      gap: 20px;
       width: 100%;
       min-width: 0;
+      overflow: hidden;
     }
     .list-word-line .list-word {
-      flex: 1 1 auto;
+      flex: 0 1 auto;
       min-width: 0;
     }
     .list-ipa {
@@ -663,6 +665,7 @@
     }
     .hearing-list-main {
       display: flex;
+      flex: 1 1 0%;
       flex-direction: column;
       align-items: flex-start;
       gap: 6px;
@@ -1645,7 +1648,7 @@
       }
     }
   </style>
-  <meta name="hearing-build-stamp" content="2026-04-27 14:22:25 +0800">
+  <meta name="hearing-build-stamp" content="2026-05-02 00:36:01 +0800">
 </head>
 <body class="v2-shell v2-only hearing-day-app">
   <div id="speech-unlock-overlay" class="speech-unlock-overlay hidden" role="dialog" aria-modal="true" aria-label="解锁发音">
@@ -4348,6 +4351,10 @@ window.__HEARING_DAY1_21_APP__ = {"source":"/Users/lizhi/Library/Mobile Document
         answerInput.addEventListener('keydown', (e) => {
           if (e.key === 'Enter') {
             e.preventDefault();
+            if (shouldShowBack && nextBtn) {
+              navigateReview(1, 'left');
+              return;
+            }
             submitReviewAnswer();
           }
         });
@@ -4626,6 +4633,6 @@ window.__HEARING_DAY1_21_APP__ = {"source":"/Users/lizhi/Library/Mobile Document
 
     init();
   </script>
-  <!-- hearing-build-stamp: 2026-04-27 14:22:25 +0800 -->
+  <!-- hearing-build-stamp: 2026-05-02 00:36:01 +0800 -->
 </body>
 </html>
