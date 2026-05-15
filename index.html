@@ -1735,7 +1735,7 @@
       }
     }
   </style>
-  <meta name="hearing-build-stamp" content="2026-05-15 13:45:37 +0800">
+  <meta name="hearing-build-stamp" content="2026-05-15 13:50:04 +0800">
 </head>
 <body class="v2-shell v2-only hearing-day-app">
   <div id="speech-unlock-overlay" class="speech-unlock-overlay hidden" role="dialog" aria-modal="true" aria-label="解锁发音">
@@ -1866,6 +1866,8 @@ window.__HEARING_DAY1_21_APP__ = {"source":"/Users/lizhi/Library/Mobile Document
     let listPage = 0;
     let savedListPage = 0;
     let savedListScrollTop = 0;
+    let savedListSearchCursor = -1;
+    let savedListSearchAnchorId = '';
     const perPage = 40;
     const AUDIO_BASE_PATH = './audio/us';
     let hearingRecords = [];
@@ -4563,6 +4565,23 @@ window.__HEARING_DAY1_21_APP__ = {"source":"/Users/lizhi/Library/Mobile Document
       const host = document.getElementById('list-items');
       savedListPage = listPage;
       savedListScrollTop = host ? host.scrollTop : 0;
+      savedListSearchCursor = searchMatchCursor;
+      const activeMatchIndex = searchMatchCursor >= 0 ? searchMatchIndices[searchMatchCursor] : -1;
+      savedListSearchAnchorId = activeMatchIndex >= 0 && curList[activeMatchIndex] ? curList[activeMatchIndex].id : '';
+    }
+
+    function restoreSavedListSearchState() {
+      if (!searchQuery || !searchMatchIndices.length) return;
+      if (savedListSearchAnchorId) {
+        const anchoredCursor = searchMatchIndices.findIndex((index) => curList[index] && curList[index].id === savedListSearchAnchorId);
+        if (anchoredCursor >= 0) {
+          searchMatchCursor = anchoredCursor;
+          return;
+        }
+      }
+      if (savedListSearchCursor >= 0 && savedListSearchCursor < searchMatchIndices.length) {
+        searchMatchCursor = savedListSearchCursor;
+      }
     }
 
     function renderList(options = {}) {
@@ -4660,6 +4679,7 @@ window.__HEARING_DAY1_21_APP__ = {"source":"/Users/lizhi/Library/Mobile Document
       document.getElementById('tab-review').classList.toggle('active', mode === 'review');
       if (mode === 'list') {
         if (previousMode !== 'list') {
+          restoreSavedListSearchState();
           const maxPage = Math.max(0, Math.ceil(curList.length / perPage) - 1);
           listPage = Math.min(savedListPage, maxPage);
           renderList({ restoreScrollTop: savedListScrollTop });
@@ -4846,6 +4866,6 @@ window.__HEARING_DAY1_21_APP__ = {"source":"/Users/lizhi/Library/Mobile Document
 
     init();
   </script>
-  <!-- hearing-build-stamp: 2026-05-15 13:45:37 +0800 -->
+  <!-- hearing-build-stamp: 2026-05-15 13:50:04 +0800 -->
 </body>
 </html>
