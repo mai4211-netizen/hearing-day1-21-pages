@@ -1735,7 +1735,7 @@
       }
     }
   </style>
-  <meta name="hearing-build-stamp" content="2026-05-15 13:39:19 +0800">
+  <meta name="hearing-build-stamp" content="2026-05-15 13:44:56 +0800">
 </head>
 <body class="v2-shell v2-only hearing-day-app">
   <div id="speech-unlock-overlay" class="speech-unlock-overlay hidden" role="dialog" aria-modal="true" aria-label="解锁发音">
@@ -1864,6 +1864,8 @@ window.__HEARING_DAY1_21_APP__ = {"source":"/Users/lizhi/Library/Mobile Document
     let curList = [];
     let curIdx = 0;
     let listPage = 0;
+    let savedListPage = 0;
+    let savedListScrollTop = 0;
     const perPage = 40;
     const AUDIO_BASE_PATH = './audio/us';
     let hearingRecords = [];
@@ -4557,8 +4559,14 @@ window.__HEARING_DAY1_21_APP__ = {"source":"/Users/lizhi/Library/Mobile Document
       if (options.autoplay) speakReviewWord(card);
     }
 
+    function saveListViewport() {
+      const host = document.getElementById('list-items');
+      savedListPage = listPage;
+      savedListScrollTop = host ? host.scrollTop : 0;
+    }
+
     function renderList(options = {}) {
-      const { preserveScroll = false } = options;
+      const { preserveScroll = false, restoreScrollTop = null } = options;
       const start = listPage * perPage;
       const items = curList.slice(start, start + perPage);
       const host = document.getElementById('list-items');
@@ -4619,11 +4627,20 @@ window.__HEARING_DAY1_21_APP__ = {"source":"/Users/lizhi/Library/Mobile Document
         host.scrollTop = Math.min(previousScrollTop, maxScrollTop);
         return;
       }
+      if (restoreScrollTop !== null) {
+        const maxScrollTop = Math.max(0, host.scrollHeight - host.clientHeight);
+        host.scrollTop = Math.min(Math.max(0, restoreScrollTop), maxScrollTop);
+        return;
+      }
       host.scrollTop = 0;
     }
 
     function switchView(mode) {
       closeSheet();
+      const previousMode = viewMode;
+      if (previousMode === 'list' && mode !== 'list') {
+        saveListViewport();
+      }
       viewMode = mode;
       const navVisible = mode === 'card';
       const prevBtn = document.getElementById('prev-btn');
@@ -4642,7 +4659,12 @@ window.__HEARING_DAY1_21_APP__ = {"source":"/Users/lizhi/Library/Mobile Document
       document.getElementById('tab-list').classList.toggle('active', mode === 'list');
       document.getElementById('tab-review').classList.toggle('active', mode === 'review');
       if (mode === 'list') {
-        listPage = Math.floor(curIdx / perPage) || 0;
+        if (previousMode !== 'list') {
+          const maxPage = Math.max(0, Math.ceil(curList.length / perPage) - 1);
+          listPage = Math.min(savedListPage, maxPage);
+          renderList({ restoreScrollTop: savedListScrollTop });
+          return;
+        }
         renderList();
       } else if (mode === 'review') {
         resetReviewDeck();
@@ -4824,6 +4846,6 @@ window.__HEARING_DAY1_21_APP__ = {"source":"/Users/lizhi/Library/Mobile Document
 
     init();
   </script>
-  <!-- hearing-build-stamp: 2026-05-15 13:39:19 +0800 -->
+  <!-- hearing-build-stamp: 2026-05-15 13:44:56 +0800 -->
 </body>
 </html>
