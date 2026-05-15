@@ -139,7 +139,6 @@
     }
     .search-box {
       width: 100%;
-      margin-top: var(--space-3);
       border: 1px solid rgba(74, 57, 39, 0.2);
       border-radius: 14px;
       padding: 14px 16px;
@@ -147,6 +146,49 @@
       font-size: 15px;
       color: var(--text);
       box-shadow: inset 0 1px 0 rgba(255,255,255,0.3);
+    }
+    .search-row {
+      margin-top: var(--space-3);
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .search-row .search-box {
+      flex: 1 1 auto;
+      min-width: 0;
+    }
+    .search-nav {
+      display: none;
+      align-items: center;
+      gap: 6px;
+      flex: 0 0 auto;
+    }
+    .search-nav.show {
+      display: inline-flex;
+    }
+    .search-match-btn {
+      min-width: auto;
+      min-height: 38px;
+      padding: 0 12px;
+      border-radius: 999px;
+      border: 1px solid rgba(117, 96, 67, 0.2);
+      background: rgba(244, 236, 223, 0.88);
+      color: var(--primary-deep);
+      font-size: 12px;
+      font-weight: 800;
+      box-shadow: none;
+    }
+    .search-match-btn:disabled {
+      opacity: 0.42;
+      cursor: default;
+    }
+    .search-match-count {
+      min-width: 44px;
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 900;
+      text-align: center;
+      white-space: nowrap;
     }
 
     .speech-unlock-overlay {
@@ -724,6 +766,10 @@
       border-color: var(--primary-deep);
       transform: translateY(-1px) scale(1.03);
       box-shadow: 0 8px 18px rgba(54, 38, 22, 0.12);
+    }
+    .hearing-list-row.search-active {
+      border-color: rgba(59, 96, 146, 0.42);
+      box-shadow: 0 12px 28px rgba(59, 96, 146, 0.16);
     }
     .hearing-list-row .list-word {
       margin: 0;
@@ -1513,9 +1559,24 @@
         font-size: 13px;
       }
       .search-box {
-        margin-top: 8px;
         padding: 12px 14px;
         font-size: 14px;
+      }
+      .search-row {
+        margin-top: 8px;
+        gap: 8px;
+      }
+      .search-nav {
+        gap: 5px;
+      }
+      .search-match-btn {
+        min-height: 34px;
+        padding: 0 10px;
+        font-size: 11px;
+      }
+      .search-match-count {
+        min-width: 36px;
+        font-size: 11px;
       }
       #card-view {
         padding: 6px 10px calc(14px + env(safe-area-inset-bottom, 0px));
@@ -1674,7 +1735,7 @@
       }
     }
   </style>
-  <meta name="hearing-build-stamp" content="2026-05-15 13:12:32 +0800">
+  <meta name="hearing-build-stamp" content="2026-05-15 13:21:25 +0800">
 </head>
 <body class="v2-shell v2-only hearing-day-app">
   <div id="speech-unlock-overlay" class="speech-unlock-overlay hidden" role="dialog" aria-modal="true" aria-label="解锁发音">
@@ -1698,7 +1759,14 @@
       <button class="progress-btn" id="progress-export-btn" type="button">导出进度</button>
       <button class="progress-btn" id="progress-import-btn" type="button">导入进度</button>
     </div>
-    <input id="search" class="search-box" type="text" placeholder="搜索单词、中文或词根..." oninput="onSearch()" />
+    <div class="search-row">
+      <input id="search" class="search-box" type="text" placeholder="搜索单词、中文或词根..." oninput="onSearch()" />
+      <div class="search-nav" id="search-nav" aria-live="polite">
+        <button id="search-match-prev" class="search-match-btn" type="button" onclick="jumpToSearchMatch(-1)">上一个</button>
+        <div id="search-match-count" class="search-match-count">0/0</div>
+        <button id="search-match-next" class="search-match-btn" type="button" onclick="jumpToSearchMatch(1)">下一个</button>
+      </div>
+    </div>
   </header>
 
   <main>
@@ -1813,6 +1881,8 @@ window.__HEARING_DAY1_21_APP__ = {"source":"/Users/lizhi/Library/Mobile Document
       familiar: false,
     };
     let searchQuery = '';
+    let searchMatchIndices = [];
+    let searchMatchCursor = -1;
     const UNFAMILIAR_STORAGE_KEY = 'hearing_day1_21_app_unfamiliar_words_v3';
     const UNFAMILIAR_WORDS_KEY = UNFAMILIAR_STORAGE_KEY;
     const CHINESE_VISIBILITY_STORAGE_KEY = 'hearing_day1_21_app_chinese_visible_v1';
@@ -1842,7 +1912,6 @@ window.__HEARING_DAY1_21_APP__ = {"source":"/Users/lizhi/Library/Mobile Document
     let touchStartX = null;
     let touchSwipeBlocked = false;
     let wheelLock = false;
-    const SEARCH_CONTEXT_RADIUS = 2;
     let replacementByWord = new Map();
     let replacementByCoreId = new Map();
     let coreByWord = new Map();
@@ -3808,36 +3877,90 @@ window.__HEARING_DAY1_21_APP__ = {"source":"/Users/lizhi/Library/Mobile Document
       return reviewAllDays ? [...availableDays] : [...reviewDayFilters].sort((a, b) => a - b);
     }
 
-    function collectSearchContextIndices(records) {
+    function matchesSearchQuery(item) {
+      if (!searchQuery) return false;
+      const base = [
+        item && item.word,
+        item && item.meaning_cn,
+        item && item.root_memory,
+        item && item.ipa_us,
+        item && item.ipa_uk,
+      ].join(' ').toLowerCase();
+      return base.includes(searchQuery);
+    }
+
+    function collectSearchMatchIndices(records = curList) {
       const list = Array.isArray(records) ? records : [];
-      if (!searchQuery) return list.map((_, index) => index);
-      const contextSet = new Set();
-      list.forEach((it, index) => {
-        const base = [it.word, it.meaning_cn, it.root_memory, it.ipa_us, it.ipa_uk].join(' ').toLowerCase();
-        if (!base.includes(searchQuery)) return;
-        const start = Math.max(0, index - SEARCH_CONTEXT_RADIUS);
-        const end = Math.min(list.length - 1, index + SEARCH_CONTEXT_RADIUS);
-        for (let cursor = start; cursor <= end; cursor += 1) {
-          contextSet.add(cursor);
-        }
+      if (!searchQuery) return [];
+      const matches = [];
+      list.forEach((item, index) => {
+        if (matchesSearchQuery(item)) matches.push(index);
       });
-      return Array.from(contextSet).sort((a, b) => a - b);
+      return matches;
     }
 
-    function getSearchMatchedRecords(records = hearingRecords) {
-      const list = Array.isArray(records) ? records : [];
-      return collectSearchContextIndices(list).map((index) => list[index]).filter(Boolean);
+    function syncSearchNavigator() {
+      const nav = document.getElementById('search-nav');
+      const prevBtn = document.getElementById('search-match-prev');
+      const nextBtn = document.getElementById('search-match-next');
+      const countEl = document.getElementById('search-match-count');
+      if (!nav || !prevBtn || !nextBtn || !countEl) return;
+      const hasQuery = !!searchQuery;
+      const totalMatches = searchMatchIndices.length;
+      const currentMatch = totalMatches && searchMatchCursor >= 0 ? searchMatchCursor + 1 : 0;
+      nav.classList.toggle('show', hasQuery);
+      countEl.innerText = `${currentMatch}/${totalMatches}`;
+      prevBtn.disabled = totalMatches <= 1 || searchMatchCursor <= 0;
+      nextBtn.disabled = totalMatches <= 1 || searchMatchCursor >= totalMatches - 1;
     }
 
-    function applyFilters({ preserveIndex = false, autoplay = false } = {}) {
-      const selectedDays = new Set(getSelectedDays());
-      const scopedList = hearingRecords
-        .filter(it => selectedDays.has(Number(it.day)))
-        .filter(matchesReviewStatus);
-      curList = getSearchMatchedRecords(scopedList)
-        .sort((a, b) => (a.order - b.order) || (a.day - b.day));
-      if (!preserveIndex || curIdx >= curList.length) curIdx = 0;
+    function jumpToSearchMatch(step) {
+      if (!searchMatchIndices.length) return;
+      const nextCursor = Math.max(0, Math.min(searchMatchIndices.length - 1, searchMatchCursor + step));
+      if (nextCursor === searchMatchCursor) {
+        syncSearchNavigator();
+        return;
+      }
+      searchMatchCursor = nextCursor;
+      curIdx = searchMatchIndices[searchMatchCursor];
       listPage = Math.floor(curIdx / perPage) || 0;
+      rerenderAllViews({ autoplay: false });
+    }
+
+    function refreshSearchMatches({ resetCursor = false, anchorId = '' } = {}) {
+      searchMatchIndices = collectSearchMatchIndices(curList);
+      if (!searchQuery || !searchMatchIndices.length) {
+        searchMatchCursor = -1;
+        syncSearchNavigator();
+        return false;
+      }
+      if (!resetCursor && anchorId) {
+        const anchoredCursor = searchMatchIndices.findIndex((index) => curList[index] && curList[index].id === anchorId);
+        if (anchoredCursor >= 0) {
+          searchMatchCursor = anchoredCursor;
+        }
+      }
+      if (resetCursor || searchMatchCursor < 0 || searchMatchCursor >= searchMatchIndices.length) {
+        searchMatchCursor = 0;
+      }
+      curIdx = searchMatchIndices[searchMatchCursor];
+      listPage = Math.floor(curIdx / perPage) || 0;
+      syncSearchNavigator();
+      return true;
+    }
+
+    function applyFilters({ preserveIndex = false, autoplay = false, resetSearchCursor = false } = {}) {
+      const selectedDays = new Set(getSelectedDays());
+      const previousActiveId = preserveIndex && !resetSearchCursor && curList[curIdx] ? curList[curIdx].id : '';
+      curList = hearingRecords
+        .filter(it => selectedDays.has(Number(it.day)))
+        .filter(matchesReviewStatus)
+        .sort((a, b) => (a.order - b.order) || (a.day - b.day));
+      const syncedSearch = refreshSearchMatches({ resetCursor: resetSearchCursor || !preserveIndex, anchorId: previousActiveId });
+      if (!syncedSearch) {
+        if (!preserveIndex || curIdx >= curList.length) curIdx = 0;
+        listPage = Math.floor(curIdx / perPage) || 0;
+      }
       rerenderAllViews({ autoplay });
     }
 
@@ -3865,7 +3988,7 @@ window.__HEARING_DAY1_21_APP__ = {"source":"/Users/lizhi/Library/Mobile Document
     function renderReviewFilterControls() {
       const host = document.getElementById('review-filter-grid');
       if (!host) return;
-      const baseList = getSearchMatchedRecords();
+      const baseList = [...hearingRecords];
       const scopedList = baseList.filter(matchesReviewStatus);
       const dayCounts = new Map();
       for (const day of availableDays) {
@@ -3904,7 +4027,7 @@ window.__HEARING_DAY1_21_APP__ = {"source":"/Users/lizhi/Library/Mobile Document
       const host = document.getElementById('list-filter-grid');
       const statusHost = document.getElementById('list-status-grid');
       if (!host || !statusHost) return;
-      const baseList = getSearchMatchedRecords();
+      const baseList = [...hearingRecords];
       const scopedList = baseList.filter(matchesReviewStatus);
       const dayCounts = new Map();
       for (const day of availableDays) {
@@ -4456,6 +4579,7 @@ window.__HEARING_DAY1_21_APP__ = {"source":"/Users/lizhi/Library/Mobile Document
       }
       let previousSectionKey = '';
       host.innerHTML = items.map((it, i) => {
+        const absoluteIndex = start + i;
         const sectionKey = `${it.day}::${it.section || ''}`;
         const sectionHeader = sectionKey !== previousSectionKey
           ? `
@@ -4468,10 +4592,11 @@ window.__HEARING_DAY1_21_APP__ = {"source":"/Users/lizhi/Library/Mobile Document
         previousSectionKey = sectionKey;
         const listIpa = it.ipa_us || it.ipa_uk || '';
         const wordLineFitClass = getListWordLineFitClass(it.word, listIpa);
+        const isActiveSearchMatch = searchMatchCursor >= 0 && searchMatchIndices[searchMatchCursor] === absoluteIndex;
         return `
           ${sectionHeader}
-          <div class="list-row v2-list-row hearing-list-row" aria-label="${sanitizeHTML(it.word)}">
-            <button class="hearing-list-main" type="button" onclick="speakListWord(${start + i})" aria-label="播放 ${sanitizeHTML(it.word)} 发音">
+          <div class="list-row v2-list-row hearing-list-row ${isActiveSearchMatch ? 'search-active' : ''}" data-list-index="${absoluteIndex}" data-search-active="${isActiveSearchMatch ? 'true' : 'false'}" aria-label="${sanitizeHTML(it.word)}">
+            <button class="hearing-list-main" type="button" onclick="speakListWord(${absoluteIndex})" aria-label="播放 ${sanitizeHTML(it.word)} 发音">
               <div class="list-word-line ${wordLineFitClass}">
                 <div class="list-word">${sanitizeHTML(it.word)}</div>
                 ${listIpa ? `<div class="list-ipa">${sanitizeHTML(listIpa)}</div>` : ''}
@@ -4479,13 +4604,17 @@ window.__HEARING_DAY1_21_APP__ = {"source":"/Users/lizhi/Library/Mobile Document
               <div class="list-mean">${sanitizeHTML(it.meaning_cn || '（中文释义待校验）')}</div>
             </button>
             <div class="hearing-list-actions">
-              <button class="hearing-list-familiar ${isWordUnfamiliar(it.word) ? 'active' : ''}" type="button" onclick="toggleListWordUnfamiliar(${start + i})" aria-pressed="${isWordUnfamiliar(it.word) ? 'true' : 'false'}" aria-label="${isWordUnfamiliar(it.word) ? '将' : '标记'} ${sanitizeHTML(it.word)} ${isWordUnfamiliar(it.word) ? '设为已熟' : '设为未熟'}">未熟</button>
-              <button class="hearing-list-arrow" type="button" onclick="jumpTo(${start + i})" aria-label="前往 ${sanitizeHTML(it.word)} 卡片">→</button>
+              <button class="hearing-list-familiar ${isWordUnfamiliar(it.word) ? 'active' : ''}" type="button" onclick="toggleListWordUnfamiliar(${absoluteIndex})" aria-pressed="${isWordUnfamiliar(it.word) ? 'true' : 'false'}" aria-label="${isWordUnfamiliar(it.word) ? '将' : '标记'} ${sanitizeHTML(it.word)} ${isWordUnfamiliar(it.word) ? '设为已熟' : '设为未熟'}">未熟</button>
+              <button class="hearing-list-arrow" type="button" onclick="jumpTo(${absoluteIndex})" aria-label="前往 ${sanitizeHTML(it.word)} 卡片">→</button>
             </div>
           </div>
         `;
       }).join('');
       document.getElementById('page-num').innerText = `${listPage + 1} / ${Math.max(1, Math.ceil(curList.length / perPage))}`;
+      const activeSearchRow = host.querySelector('[data-search-active="true"]');
+      if (activeSearchRow && !preserveScroll) {
+        activeSearchRow.scrollIntoView({ block: 'center', behavior: 'smooth' });
+      }
       if (preserveScroll) {
         const maxScrollTop = Math.max(0, host.scrollHeight - host.clientHeight);
         host.scrollTop = Math.min(previousScrollTop, maxScrollTop);
@@ -4552,7 +4681,7 @@ window.__HEARING_DAY1_21_APP__ = {"source":"/Users/lizhi/Library/Mobile Document
 
     function onSearch() {
       searchQuery = document.getElementById('search').value.trim().toLowerCase();
-      applyFilters({ autoplay: false });
+      applyFilters({ autoplay: false, preserveIndex: true, resetSearchCursor: true });
     }
 
     function setProgressMeta(text) {
@@ -4578,6 +4707,7 @@ window.__HEARING_DAY1_21_APP__ = {"source":"/Users/lizhi/Library/Mobile Document
       syncCardFamiliarUI();
       renderReviewFilterControls();
       renderListFilterControls();
+      syncSearchNavigator();
       updateProgress();
     }
 
@@ -4695,6 +4825,6 @@ window.__HEARING_DAY1_21_APP__ = {"source":"/Users/lizhi/Library/Mobile Document
 
     init();
   </script>
-  <!-- hearing-build-stamp: 2026-05-15 13:12:32 +0800 -->
+  <!-- hearing-build-stamp: 2026-05-15 13:21:25 +0800 -->
 </body>
 </html>
