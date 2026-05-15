@@ -571,12 +571,18 @@
       gap: 20px;
       width: 100%;
       min-width: 0;
-      overflow: hidden;
+      overflow: visible;
     }
     .list-word-line .list-word {
       flex: 0 1 auto;
       min-width: 0;
     }
+    .list-word-line.fit-compact .list-word { font-size: 22px; }
+    .list-word-line.fit-compact .list-ipa { font-size: 12px; }
+    .list-word-line.fit-dense .list-word { font-size: 20px; }
+    .list-word-line.fit-dense .list-ipa { font-size: 11px; }
+    .list-word-line.fit-ultra .list-word { font-size: 18px; }
+    .list-word-line.fit-ultra .list-ipa { font-size: 10.4px; }
     .list-ipa {
       flex: 0 0 auto;
       color: rgba(111, 90, 73, 0.74);
@@ -724,13 +730,11 @@
       font-size: 24px;
       line-height: 1.1;
       white-space: nowrap;
-      overflow: hidden;
-      text-overflow: ellipsis;
+      overflow: visible;
     }
     .hearing-list-row .list-ipa {
-      max-width: 44%;
-      overflow: hidden;
-      text-overflow: ellipsis;
+      max-width: none;
+      overflow: visible;
     }
     .hearing-list-row .list-mean {
       margin: 0;
@@ -752,10 +756,21 @@
       border-top: 1px solid rgba(117, 96, 67, 0.12);
       background: rgba(244, 236, 223, 0.7);
       padding: 8px 10px;
-      display: flex;
-      justify-content: center;
+      display: grid;
+      grid-template-columns: auto auto auto minmax(0, 1fr);
       align-items: center;
       gap: 12px;
+    }
+    .pager-progress {
+      justify-self: end;
+      min-width: 0;
+      color: var(--primary-deep);
+      font-size: 28px;
+      font-weight: 800;
+      font-family: var(--font-sans-stack);
+      letter-spacing: 0.02em;
+      text-align: right;
+      white-space: nowrap;
     }
 
     footer {
@@ -773,7 +788,7 @@
       grid-template-columns: 52px 1fr 52px;
     }
     footer.footer-static {
-      grid-template-columns: 52px minmax(0, 1fr) 52px;
+      display: none;
     }
     footer.footer-static .nav-btn {
       visibility: hidden;
@@ -793,7 +808,6 @@
       width: 100%;
     }
     .prog-main { font-size: 28px; font-weight: 800; color: var(--primary-deep); font-family: var(--font-sans-stack); letter-spacing: 0.02em; }
-    .prog-sub { font-size: 11px; color: var(--muted); font-weight: 800; }
     .progress-actions {
       display: flex;
       flex-wrap: wrap;
@@ -1549,8 +1563,20 @@
         font-size: 18px;
       }
       .hearing-list-row .list-ipa {
-        max-width: 42%;
         font-size: 12px;
+      }
+      .list-word-line.fit-compact .list-word { font-size: 17px; }
+      .list-word-line.fit-compact .list-ipa { font-size: 11px; }
+      .list-word-line.fit-dense .list-word { font-size: 15px; }
+      .list-word-line.fit-dense .list-ipa { font-size: 10px; }
+      .list-word-line.fit-ultra .list-word { font-size: 13px; }
+      .list-word-line.fit-ultra .list-ipa { font-size: 9.2px; }
+      .pager {
+        grid-template-columns: auto auto auto minmax(92px, 1fr);
+        gap: 10px;
+      }
+      .pager-progress {
+        font-size: 16px;
       }
       .hearing-list-row .list-mean {
         font-size: 13px;
@@ -1648,7 +1674,7 @@
       }
     }
   </style>
-  <meta name="hearing-build-stamp" content="2026-05-02 00:40:26 +0800">
+  <meta name="hearing-build-stamp" content="2026-05-15 13:08:46 +0800">
 </head>
 <body class="v2-shell v2-only hearing-day-app">
   <div id="speech-unlock-overlay" class="speech-unlock-overlay hidden" role="dialog" aria-modal="true" aria-label="解锁发音">
@@ -1723,6 +1749,7 @@
         <button onclick="changePage(-1)">上一页</button>
         <strong id="page-num">1 / 1</strong>
         <button onclick="changePage(1)">下一页</button>
+        <div class="pager-progress" id="progress">0 / 0</div>
       </div>
     </section>
 
@@ -1747,8 +1774,7 @@
   <footer id="main-footer">
     <button class="nav-btn" id="prev-btn" aria-label="上一个">⇠</button>
     <div class="prog">
-      <div class="prog-main" id="progress">0 / 0</div>
-      <div class="prog-sub" id="progress-sub">Day 1 - Day 21 听力词表</div>
+      <div class="prog-main" id="card-progress">0 / 0</div>
     </div>
     <button class="nav-btn" id="next-btn" aria-label="下一个">⇢</button>
   </footer>
@@ -1817,6 +1843,7 @@ window.__HEARING_DAY1_21_APP__ = {"source":"/Users/lizhi/Library/Mobile Document
     let touchStartX = null;
     let touchSwipeBlocked = false;
     let wheelLock = false;
+    const SEARCH_CONTEXT_RADIUS = 2;
     let replacementByWord = new Map();
     let replacementByCoreId = new Map();
     let coreByWord = new Map();
@@ -2451,6 +2478,16 @@ window.__HEARING_DAY1_21_APP__ = {"source":"/Users/lizhi/Library/Mobile Document
       return '';
     }
 
+    function getListWordLineFitClass(word, ipa) {
+      const cleanWord = String(word || '').replace(/\s+/g, ' ').trim();
+      const cleanIpa = String(ipa || '').replace(/\s+/g, '').trim();
+      const score = (cleanWord.length * 3) + (cleanIpa.length * 1.8);
+      if (score >= 82) return 'fit-ultra';
+      if (score >= 66) return 'fit-dense';
+      if (score >= 48) return 'fit-compact';
+      return '';
+    }
+
     function isPendingText(value) {
       return /待(补充|校验)/.test(String(value || ''));
     }
@@ -2574,9 +2611,9 @@ window.__HEARING_DAY1_21_APP__ = {"source":"/Users/lizhi/Library/Mobile Document
 
         const hard = report.hard_check || {};
         const summary = `校验 core=${report.core_count} total=${report.total_words_by_count_rule} 对齐错误=${report.line_alignment_errors}`;
-        document.getElementById('progress-sub').innerText = summary;
+        setProgressMeta(summary);
         if (!hard.core_equals_376 || !hard.count_rule_equals_538 || !hard.no_missing_fields || !hard.no_placeholders || !hard.line_alignment_zero) {
-          document.getElementById('progress-sub').innerText = '数据校验未全绿，请先运行构建脚本修复';
+          setProgressMeta('数据校验未全绿，请先运行构建脚本修复');
         }
 
         bindEvents();
@@ -2586,7 +2623,7 @@ window.__HEARING_DAY1_21_APP__ = {"source":"/Users/lizhi/Library/Mobile Document
         resetReviewDeck();
       } catch (err) {
         document.getElementById('f-word').innerText = '数据加载失败';
-        document.getElementById('progress-sub').innerText = '请确认 data_bundle.js 或 JSON 文件存在且同目录';
+        setProgressMeta('请确认 data_bundle.js 或 JSON 文件存在且同目录');
         console.error(err);
       }
     }
@@ -3772,20 +3809,33 @@ window.__HEARING_DAY1_21_APP__ = {"source":"/Users/lizhi/Library/Mobile Document
       return reviewAllDays ? [...availableDays] : [...reviewDayFilters].sort((a, b) => a - b);
     }
 
-    function getSearchMatchedRecords() {
-      if (!searchQuery) return [...hearingRecords];
-      return hearingRecords.filter((it) => {
+    function collectSearchContextIndices(records) {
+      const list = Array.isArray(records) ? records : [];
+      if (!searchQuery) return list.map((_, index) => index);
+      const contextSet = new Set();
+      list.forEach((it, index) => {
         const base = [it.word, it.meaning_cn, it.root_memory, it.ipa_us, it.ipa_uk].join(' ').toLowerCase();
-        return base.includes(searchQuery);
+        if (!base.includes(searchQuery)) return;
+        const start = Math.max(0, index - SEARCH_CONTEXT_RADIUS);
+        const end = Math.min(list.length - 1, index + SEARCH_CONTEXT_RADIUS);
+        for (let cursor = start; cursor <= end; cursor += 1) {
+          contextSet.add(cursor);
+        }
       });
+      return Array.from(contextSet).sort((a, b) => a - b);
+    }
+
+    function getSearchMatchedRecords(records = hearingRecords) {
+      const list = Array.isArray(records) ? records : [];
+      return collectSearchContextIndices(list).map((index) => list[index]).filter(Boolean);
     }
 
     function applyFilters({ preserveIndex = false, autoplay = false } = {}) {
       const selectedDays = new Set(getSelectedDays());
-      const baseList = getSearchMatchedRecords();
-      curList = baseList
+      const scopedList = hearingRecords
         .filter(it => selectedDays.has(Number(it.day)))
-        .filter(matchesReviewStatus)
+        .filter(matchesReviewStatus);
+      curList = getSearchMatchedRecords(scopedList)
         .sort((a, b) => (a.order - b.order) || (a.day - b.day));
       if (!preserveIndex || curIdx >= curList.length) curIdx = 0;
       listPage = Math.floor(curIdx / perPage) || 0;
@@ -4418,11 +4468,12 @@ window.__HEARING_DAY1_21_APP__ = {"source":"/Users/lizhi/Library/Mobile Document
           : '';
         previousSectionKey = sectionKey;
         const listIpa = it.ipa_us || it.ipa_uk || '';
+        const wordLineFitClass = getListWordLineFitClass(it.word, listIpa);
         return `
           ${sectionHeader}
           <div class="list-row v2-list-row hearing-list-row" aria-label="${sanitizeHTML(it.word)}">
             <button class="hearing-list-main" type="button" onclick="speakListWord(${start + i})" aria-label="播放 ${sanitizeHTML(it.word)} 发音">
-              <div class="list-word-line">
+              <div class="list-word-line ${wordLineFitClass}">
                 <div class="list-word">${sanitizeHTML(it.word)}</div>
                 ${listIpa ? `<div class="list-ipa">${sanitizeHTML(listIpa)}</div>` : ''}
               </div>
@@ -4505,11 +4556,23 @@ window.__HEARING_DAY1_21_APP__ = {"source":"/Users/lizhi/Library/Mobile Document
       applyFilters({ autoplay: false });
     }
 
+    function setProgressMeta(text) {
+      const meta = String(text || '');
+      const progressEl = document.getElementById('progress');
+      const cardProgressEl = document.getElementById('card-progress');
+      if (progressEl) progressEl.title = meta;
+      if (cardProgressEl) cardProgressEl.title = meta;
+    }
+
     function updateProgress() {
       const total = curList.length;
       const shown = total ? curIdx + 1 : 0;
-      document.getElementById('progress').innerText = `${shown} / ${total}`;
-      document.getElementById('progress-sub').innerText = `Day 1-21 听力词表 · 共 ${hearingRecords.length} 词`;
+      const progressText = `${shown} / ${total}`;
+      const progressEl = document.getElementById('progress');
+      const cardProgressEl = document.getElementById('card-progress');
+      if (progressEl) progressEl.innerText = progressText;
+      if (cardProgressEl) cardProgressEl.innerText = progressText;
+      setProgressMeta(`Day 1-21 听力词表 · 共 ${hearingRecords.length} 词`);
     }
 
     function refreshSharedViews() {
@@ -4626,13 +4689,13 @@ window.__HEARING_DAY1_21_APP__ = {"source":"/Users/lizhi/Library/Mobile Document
         resetReviewDeck();
       } catch (err) {
         document.getElementById('f-word').innerText = '数据加载失败';
-        document.getElementById('progress-sub').innerText = '请确认 hearing_day1_21_app_bundle.js 或 hearing_day1_21_words.json 存在';
+        setProgressMeta('请确认 hearing_day1_21_app_bundle.js 或 hearing_day1_21_words.json 存在');
         console.error(err);
       }
     }
 
     init();
   </script>
-  <!-- hearing-build-stamp: 2026-05-02 00:40:26 +0800 -->
+  <!-- hearing-build-stamp: 2026-05-15 13:08:46 +0800 -->
 </body>
 </html>
