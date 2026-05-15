@@ -1735,7 +1735,7 @@
       }
     }
   </style>
-  <meta name="hearing-build-stamp" content="2026-05-15 13:50:04 +0800">
+  <meta name="hearing-build-stamp" content="2026-05-15 13:53:26 +0800">
 </head>
 <body class="v2-shell v2-only hearing-day-app">
   <div id="speech-unlock-overlay" class="speech-unlock-overlay hidden" role="dialog" aria-modal="true" aria-label="解锁发音">
@@ -1812,9 +1812,9 @@
       </details>
       <div class="list-scroll v2-list-scroll" id="list-items" aria-live="polite"></div>
       <div class="pager">
-        <button onclick="changePage(-1)">上一页</button>
+        <button id="list-page-prev" onclick="changePage(-1)">上一页</button>
         <strong id="page-num">1 / 1</strong>
-        <button onclick="changePage(1)">下一页</button>
+        <button id="list-page-next" onclick="changePage(1)">下一页</button>
         <div class="pager-progress" id="progress">0 / 0</div>
       </div>
     </section>
@@ -1886,6 +1886,7 @@ window.__HEARING_DAY1_21_APP__ = {"source":"/Users/lizhi/Library/Mobile Document
     let searchQuery = '';
     let searchMatchIndices = [];
     let searchMatchCursor = -1;
+    let searchNavigatorEnabled = false;
     const UNFAMILIAR_STORAGE_KEY = 'hearing_day1_21_app_unfamiliar_words_v3';
     const UNFAMILIAR_WORDS_KEY = UNFAMILIAR_STORAGE_KEY;
     const CHINESE_VISIBILITY_STORAGE_KEY = 'hearing_day1_21_app_chinese_visible_v1';
@@ -3902,19 +3903,38 @@ window.__HEARING_DAY1_21_APP__ = {"source":"/Users/lizhi/Library/Mobile Document
       return matches;
     }
 
+    function normalizeSearchWordKey(text) {
+      return String(text || '').trim().toLowerCase().replace(/[^a-z0-9]+/g, '');
+    }
+
+    function collectExactWordMatchIndices(records = curList) {
+      const list = Array.isArray(records) ? records : [];
+      const queryKey = normalizeSearchWordKey(searchQuery);
+      if (!queryKey) return [];
+      const matches = [];
+      list.forEach((item, index) => {
+        if (normalizeSearchWordKey(item && item.word) === queryKey) matches.push(index);
+      });
+      return matches;
+    }
+
+    function isSearchLocatorActive() {
+      return !!searchQuery && searchMatchIndices.length > 0;
+    }
+
     function syncSearchNavigator() {
       const nav = document.getElementById('search-nav');
       const prevBtn = document.getElementById('search-match-prev');
       const nextBtn = document.getElementById('search-match-next');
       const countEl = document.getElementById('search-match-count');
       if (!nav || !prevBtn || !nextBtn || !countEl) return;
-      const hasQuery = !!searchQuery;
+      const navVisible = searchNavigatorEnabled && searchMatchIndices.length > 1;
       const totalMatches = searchMatchIndices.length;
       const currentMatch = totalMatches && searchMatchCursor >= 0 ? searchMatchCursor + 1 : 0;
-      nav.classList.toggle('show', hasQuery);
+      nav.classList.toggle('show', navVisible);
       countEl.innerText = `${currentMatch}/${totalMatches}`;
-      prevBtn.disabled = totalMatches <= 1 || searchMatchCursor <= 0;
-      nextBtn.disabled = totalMatches <= 1 || searchMatchCursor >= totalMatches - 1;
+      prevBtn.disabled = !navVisible || searchMatchCursor <= 0;
+      nextBtn.disabled = !navVisible || searchMatchCursor >= totalMatches - 1;
     }
 
     function jumpToSearchMatch(step) {
@@ -3931,9 +3951,13 @@ window.__HEARING_DAY1_21_APP__ = {"source":"/Users/lizhi/Library/Mobile Document
     }
 
     function refreshSearchMatches({ resetCursor = false, anchorId = '' } = {}) {
-      searchMatchIndices = collectSearchMatchIndices(curList);
+      const exactWordMatches = collectExactWordMatchIndices(curList);
+      const broadMatches = collectSearchMatchIndices(curList);
+      searchNavigatorEnabled = exactWordMatches.length > 1;
+      searchMatchIndices = exactWordMatches.length ? exactWordMatches : broadMatches;
       if (!searchQuery || !searchMatchIndices.length) {
         searchMatchCursor = -1;
+        searchNavigatorEnabled = false;
         syncSearchNavigator();
         return false;
       }
@@ -4586,10 +4610,15 @@ window.__HEARING_DAY1_21_APP__ = {"source":"/Users/lizhi/Library/Mobile Document
 
     function renderList(options = {}) {
       const { preserveScroll = false, restoreScrollTop = null } = options;
-      const start = listPage * perPage;
-      const items = curList.slice(start, start + perPage);
+      const locatorMode = isSearchLocatorActive();
+      const start = locatorMode ? 0 : listPage * perPage;
+      const items = locatorMode ? curList : curList.slice(start, start + perPage);
       const host = document.getElementById('list-items');
+      const prevPageBtn = document.getElementById('list-page-prev');
+      const nextPageBtn = document.getElementById('list-page-next');
       const previousScrollTop = host ? host.scrollTop : 0;
+      if (prevPageBtn) prevPageBtn.disabled = locatorMode;
+      if (nextPageBtn) nextPageBtn.disabled = locatorMode;
       if (!items.length) {
         host.innerHTML = `
           <div class="list-row v2-list-row hearing-list-empty">
@@ -4636,7 +4665,7 @@ window.__HEARING_DAY1_21_APP__ = {"source":"/Users/lizhi/Library/Mobile Document
           </div>
         `;
       }).join('');
-      document.getElementById('page-num').innerText = `${listPage + 1} / ${Math.max(1, Math.ceil(curList.length / perPage))}`;
+      document.getElementById('page-num').innerText = locatorMode ? '定位中' : `${listPage + 1} / ${Math.max(1, Math.ceil(curList.length / perPage))}`;
       const activeSearchRow = host.querySelector('[data-search-active="true"]');
       if (activeSearchRow && !preserveScroll) {
         activeSearchRow.scrollIntoView({ block: 'center', behavior: 'smooth' });
@@ -4713,6 +4742,7 @@ window.__HEARING_DAY1_21_APP__ = {"source":"/Users/lizhi/Library/Mobile Document
     }
 
     function changePage(step) {
+      if (isSearchLocatorActive()) return;
       const max = Math.ceil(curList.length / perPage);
       const next = listPage + step;
       if (next < 0 || next >= max) return;
@@ -4866,6 +4896,6 @@ window.__HEARING_DAY1_21_APP__ = {"source":"/Users/lizhi/Library/Mobile Document
 
     init();
   </script>
-  <!-- hearing-build-stamp: 2026-05-15 13:50:04 +0800 -->
+  <!-- hearing-build-stamp: 2026-05-15 13:53:26 +0800 -->
 </body>
 </html>
