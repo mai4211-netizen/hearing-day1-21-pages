@@ -1,0 +1,115 @@
+name: Frontend smoke test
+
+on:
+  pull_request:
+    paths:
+      - index.html
+      - styles.css
+      - app.js
+      - audio.js
+      - .github/workflows/smoke-test.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check JavaScript syntax
+        run: |
+          node --check app.js
+          node --check audio.js
+
+      - name: Check HTML structure
+        run: |
+          python - <<'PY'
+          from html.parser import HTMLParser
+          from pathlib import Path
+          html = Path('index.html').read_text(encoding='utf-8')
+          class Parser(HTMLParser):
+              pass
+          Parser().feed(html)
+          for required in ['id="search"', 'id="toolbar"', 'id="main"', 'id="voice-status"']:
+              assert required in html, required
+          print('HTML structure OK')
+          PY
+
+      - name: Verify legacy vocabulary payload
+        run: |
+          curl -fsSL --retry 3 --max-time 30 \
+            https://raw.githubusercontent.com/mai4211-netizen/hearing-day1-21-pages/01536ef3d85303119feb8876668343be846c68b5/index.html \
+            -o /tmp/legacy.html
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          source = Path('/tmp/legacy.html').read_text(encoding='utf-8')
+          marker = 'window.__HEARING_DAY1_21_APP__'
+          start = source.index('{', source.index('=', source.index(marker)))
+          depth = 0
+          in_string = False
+          escaped = False
+          for i in range(start, len(source)):
+              ch = source[i]
+              if in_string:
+                  if escaped: escaped = False
+                  elif ch == '\\': escaped = True
+                  elif ch == '"': in_string = False
+                  continue
+              if ch == '"': in_string = True
+              elif ch == '{': depth += 1
+              elif ch == '}':
+                  depth -= 1
+                  if depth == 0:
+                      payload = json.loads(source[start:i + 1])
+                      break
+          assert len(payload['words']) == 1773, len(payload['words'])
+          print('Vocabulary payload OK:', len(payload['words']))
+          PY
+
+      - name: Verify dictionary recording returns real audio
+        run: |
+          curl -fsSL --retry 3 --max-time 30 \
+            https://api.dictionaryapi.dev/api/v2/entries/en/hello \
+            -o /tmp/dictionary.json
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          payload = json.loads(Path('/tmp/dictionary.json').read_text())
+          urls = [p.get('audio', '') for entry in payload for p in entry.get('phonetics', []) if p.get('audio')]
+          assert urls, payload
+          url = urls[0]
+          if url.startswith('//'): url = 'https:' + url
+          Path('/tmp/audio-url.txt').write_text(url)
+          print('Audio URL:', url)
+          PY
+          curl -fsSL --retry 3 --max-time 30 "$(cat /tmp/audio-url.txt)" -o /tmp/voice.mp3
+          python - <<'PY'
+          from pathlib import Path
+          data = Path('/tmp/voice.mp3').read_bytes()
+          assert len(data) > 1000, len(data)
+          assert not data.lstrip().startswith((b'<', b'{')), data[:40]
+          print('Dictionary recording OK:', len(data), 'bytes')
+          PY
+
+      - name: Verify Wiktionary fallback endpoint
+        run: |
+          curl -fsSL --retry 3 --max-time 30 --get \
+            --data-urlencode 'action=parse' \
+            --data-urlencode 'page=hello' \
+            --data-urlencode 'prop=text' \
+            --data-urlencode 'format=json' \
+            https://en.wiktionary.org/w/api.php \
+            -o /tmp/wiktionary.json
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          payload = json.loads(Path('/tmp/wiktionary.json').read_text())
+          html = payload.get('parse', {}).get('text', {}).get('*', '')
+          assert html and ('audio' in html.lower() or 'upload.wikimedia.org' in html), 'No audio markup found'
+          print('Wiktionary fallback OK')
+          PY

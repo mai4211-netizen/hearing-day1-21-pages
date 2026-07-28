@@ -3,21 +3,31 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <meta name="theme-color" content="#d8ccb7" />
-  <title>21天听力场景词汇</title>
+  <meta name="theme-color" content="#152033" />
+  <title>21天场景词汇 · List</title>
   <link rel="stylesheet" href="./styles.css" />
-
 </head>
 <body>
-  <div class="app">
-    <header>
-      <div class="title-row">
-        <h1>21天听力场景词汇</h1>
+  <div class="app-shell">
+    <header class="app-header">
+      <div class="topline">
+        <div class="brand">
+          <span class="brand-mark" aria-hidden="true">21</span>
+          <div>
+            <div class="eyebrow">HEARING VOCABULARY · LIST</div>
+            <h1>21天场景词汇</h1>
+          </div>
+        </div>
         <div class="summary" id="summary">正在载入…</div>
       </div>
 
-      <div class="search-row">
-        <input id="search" class="search-box" type="search" autocomplete="off" placeholder="搜索英文、中文或场景…" aria-label="搜索词汇" />
+      <div class="control-grid">
+        <label class="search-control">
+          <span class="search-icon" aria-hidden="true">⌕</span>
+          <input id="search" type="search" autocomplete="off" placeholder="搜索英文、中文、场景或 Day…" aria-label="搜索词汇" />
+          <kbd>/</kbd>
+        </label>
+
         <div class="accent-switch" role="group" aria-label="发音口音">
           <button class="accent-btn" id="accent-us" type="button" data-accent="en-US">US</button>
           <button class="accent-btn" id="accent-uk" type="button" data-accent="en-GB">UK</button>
@@ -25,23 +35,31 @@
       </div>
 
       <div class="toolbar" id="toolbar" aria-label="词表筛选"></div>
-      <div class="audio-note">点单词或扬声器播放。真人词典录音优先；没有对应录音时，才使用设备的备用声线。</div>
+
+      <div class="status-strip">
+        <span class="status-dot" aria-hidden="true"></span>
+        <span id="voice-status">词典 / Wiktionary 真人录音</span>
+        <span class="status-separator">·</span>
+        <span>无真人录音时不播放系统声线</span>
+      </div>
     </header>
 
-    <main id="main">
-      <div class="loading">正在读取旧项目中的词表数据…</div>
+    <main id="main" aria-live="polite">
+      <div class="loading-state">
+        <div class="loading-pulse"></div>
+        <span>正在读取词表…</span>
+      </div>
     </main>
+
+    <nav class="pager" id="pager" aria-label="分页" hidden>
+      <button id="prev-page" type="button" aria-label="上一页">← 上一页</button>
+      <div class="page-status" id="page-status">1 / 1</div>
+      <button id="next-page" type="button" aria-label="下一页">下一页 →</button>
+    </nav>
   </div>
 
-  <nav class="pager" id="pager" aria-label="分页" hidden>
-    <button id="prev-page" type="button" aria-label="上一页">←</button>
-    <div class="page-status" id="page-status">1 / 1</div>
-    <button id="next-page" type="button" aria-label="下一页">→</button>
-  </nav>
-
   <div class="toast" id="toast" role="status" aria-live="polite"></div>
-
   <script src="./app.js" defer></script>
-
+  <script src="./audio.js" defer></script>
 </body>
 </html>
