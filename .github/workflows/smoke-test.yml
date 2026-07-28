@@ -6,6 +6,7 @@ on:
       - index.html
       - styles.css
       - app.js
+      - audio.js
       - .github/workflows/smoke-test.yml
   workflow_dispatch:
 
@@ -20,7 +21,9 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Check JavaScript syntax
-        run: node --check app.js
+        run: |
+          node --check app.js
+          node --check audio.js
 
       - name: Check HTML structure
         run: |
@@ -68,15 +71,45 @@ jobs:
           print('Vocabulary payload OK:', len(payload['words']))
           PY
 
-      - name: Verify natural cloud voice returns audio
+      - name: Verify dictionary recording returns real audio
         run: |
           curl -fsSL --retry 3 --max-time 30 \
-            'https://api.streamelements.com/kappa/v2/speech?voice=Joanna&text=hello' \
-            -o /tmp/voice.mp3
+            https://api.dictionaryapi.dev/api/v2/entries/en/hello \
+            -o /tmp/dictionary.json
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          payload = json.loads(Path('/tmp/dictionary.json').read_text())
+          urls = [p.get('audio', '') for entry in payload for p in entry.get('phonetics', []) if p.get('audio')]
+          assert urls, payload
+          url = urls[0]
+          if url.startswith('//'): url = 'https:' + url
+          Path('/tmp/audio-url.txt').write_text(url)
+          print('Audio URL:', url)
+          PY
+          curl -fsSL --retry 3 --max-time 30 "$(cat /tmp/audio-url.txt)" -o /tmp/voice.mp3
           python - <<'PY'
           from pathlib import Path
           data = Path('/tmp/voice.mp3').read_bytes()
           assert len(data) > 1000, len(data)
           assert not data.lstrip().startswith((b'<', b'{')), data[:40]
-          print('Cloud voice audio OK:', len(data), 'bytes')
+          print('Dictionary recording OK:', len(data), 'bytes')
+          PY
+
+      - name: Verify Wiktionary fallback endpoint
+        run: |
+          curl -fsSL --retry 3 --max-time 30 --get \
+            --data-urlencode 'action=parse' \
+            --data-urlencode 'page=hello' \
+            --data-urlencode 'prop=text' \
+            --data-urlencode 'format=json' \
+            https://en.wiktionary.org/w/api.php \
+            -o /tmp/wiktionary.json
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          payload = json.loads(Path('/tmp/wiktionary.json').read_text())
+          html = payload.get('parse', {}).get('text', {}).get('*', '')
+          assert html and ('audio' in html.lower() or 'upload.wikimedia.org' in html), 'No audio markup found'
+          print('Wiktionary fallback OK')
           PY
