@@ -1,0 +1,82 @@
+name: Frontend smoke test
+
+on:
+  pull_request:
+    paths:
+      - index.html
+      - styles.css
+      - app.js
+      - .github/workflows/smoke-test.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check JavaScript syntax
+        run: node --check app.js
+
+      - name: Check HTML structure
+        run: |
+          python - <<'PY'
+          from html.parser import HTMLParser
+          from pathlib import Path
+          html = Path('index.html').read_text(encoding='utf-8')
+          class Parser(HTMLParser):
+              pass
+          Parser().feed(html)
+          for required in ['id="search"', 'id="toolbar"', 'id="main"', 'id="voice-status"']:
+              assert required in html, required
+          print('HTML structure OK')
+          PY
+
+      - name: Verify legacy vocabulary payload
+        run: |
+          curl -fsSL --retry 3 --max-time 30 \
+            https://raw.githubusercontent.com/mai4211-netizen/hearing-day1-21-pages/01536ef3d85303119feb8876668343be846c68b5/index.html \
+            -o /tmp/legacy.html
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          source = Path('/tmp/legacy.html').read_text(encoding='utf-8')
+          marker = 'window.__HEARING_DAY1_21_APP__'
+          start = source.index('{', source.index('=', source.index(marker)))
+          depth = 0
+          in_string = False
+          escaped = False
+          for i in range(start, len(source)):
+              ch = source[i]
+              if in_string:
+                  if escaped: escaped = False
+                  elif ch == '\\': escaped = True
+                  elif ch == '"': in_string = False
+                  continue
+              if ch == '"': in_string = True
+              elif ch == '{': depth += 1
+              elif ch == '}':
+                  depth -= 1
+                  if depth == 0:
+                      payload = json.loads(source[start:i + 1])
+                      break
+          assert len(payload['words']) == 1773, len(payload['words'])
+          print('Vocabulary payload OK:', len(payload['words']))
+          PY
+
+      - name: Verify natural cloud voice returns audio
+        run: |
+          curl -fsSL --retry 3 --max-time 30 \
+            'https://api.streamelements.com/kappa/v2/speech?voice=Joanna&text=hello' \
+            -o /tmp/voice.mp3
+          python - <<'PY'
+          from pathlib import Path
+          data = Path('/tmp/voice.mp3').read_bytes()
+          assert len(data) > 1000, len(data)
+          assert not data.lstrip().startswith((b'<', b'{')), data[:40]
+          print('Cloud voice audio OK:', len(data), 'bytes')
+          PY
