@@ -5,12 +5,14 @@ const SOURCE_URLS = [
   `https://raw.githubusercontent.com/mai4211-netizen/hearing-day1-21-pages/${PINNED_SOURCE_COMMIT}/index.html`,
   `https://cdn.jsdelivr.net/gh/mai4211-netizen/hearing-day1-21-pages@${PINNED_SOURCE_COMMIT}/index.html`,
 ];
+const CLOUD_TTS_ENDPOINT = 'https://api.streamelements.com/kappa/v2/speech';
 const DICTIONARY_ENDPOINT = 'https://api.dictionaryapi.dev/api/v2/entries/en/';
-const PAGE_SIZE = 80;
+const PAGE_SIZE = 100;
 const UNFAMILIAR_STORAGE_KEY = 'hearing_day1_21_app_unfamiliar_words_v3';
 const ACCENT_STORAGE_KEY = 'hearing_day1_21_list_accent_v1';
-const AUDIO_URL_CACHE_KEY = 'hearing_day1_21_human_audio_urls_v1';
-const MAX_CACHED_AUDIO_URLS = 400;
+const AUDIO_URL_CACHE_KEY = 'hearing_day1_21_dictionary_audio_v2';
+const MAX_CACHED_AUDIO_URLS = 500;
+const CLOUD_VOICES = { 'en-US': 'Joanna', 'en-GB': 'Amy' };
 
 const state = {
   records: [],
@@ -21,11 +23,10 @@ const state = {
   unfamiliar: new Set(),
   accent: localStorage.getItem(ACCENT_STORAGE_KEY) === 'en-GB' ? 'en-GB' : 'en-US',
   page: 0,
-  payload: null,
   playingId: '',
   currentAudio: null,
   speechToken: 0,
-  audioUrls: loadJsonObject(AUDIO_URL_CACHE_KEY),
+  dictionaryAudio: loadJsonObject(AUDIO_URL_CACHE_KEY),
 };
 
 const mainEl = document.getElementById('main');
@@ -37,27 +38,24 @@ const prevPageBtn = document.getElementById('prev-page');
 const nextPageBtn = document.getElementById('next-page');
 const searchEl = document.getElementById('search');
 const toastEl = document.getElementById('toast');
+const voiceStatusEl = document.getElementById('voice-status');
 
 function loadJsonObject(key) {
   try {
     const value = JSON.parse(localStorage.getItem(key) || '{}');
     return value && typeof value === 'object' && !Array.isArray(value) ? value : {};
-  } catch {
-    return {};
-  }
+  } catch { return {}; }
 }
 
 function loadWordSet(key) {
   try {
     const value = JSON.parse(localStorage.getItem(key) || '[]');
     return new Set(Array.isArray(value) ? value.map(normalizeWordKey).filter(Boolean) : []);
-  } catch {
-    return new Set();
-  }
+  } catch { return new Set(); }
 }
 
 function saveWordSet(key, words) {
-  localStorage.setItem(key, JSON.stringify([...words].sort()));
+  try { localStorage.setItem(key, JSON.stringify([...words].sort())); } catch {}
 }
 
 function normalizeWordKey(value) {
@@ -66,18 +64,17 @@ function normalizeWordKey(value) {
 
 function escapeHtml(value) {
   return String(value ?? '')
-    .replaceAll('&', '&amp;')
-    .replaceAll('<', '&lt;')
-    .replaceAll('>', '&gt;')
-    .replaceAll('"', '&quot;')
-    .replaceAll("'", '&#39;');
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
 }
 
 function extractEmbeddedPayload(source) {
   const marker = 'window.__HEARING_DAY1_21_APP__';
   const markerIndex = source.indexOf(marker);
   if (markerIndex < 0) throw new Error('旧项目中没有找到词表数据。');
-
   const equalsIndex = source.indexOf('=', markerIndex + marker.length);
   const objectStart = source.indexOf('{', equalsIndex + 1);
   if (equalsIndex < 0 || objectStart < 0) throw new Error('词表数据格式无法识别。');
@@ -93,10 +90,7 @@ function extractEmbeddedPayload(source) {
       else if (char === '"') inString = false;
       continue;
     }
-    if (char === '"') {
-      inString = true;
-      continue;
-    }
+    if (char === '"') { inString = true; continue; }
     if (char === '{') depth += 1;
     if (char === '}') {
       depth -= 1;
@@ -113,9 +107,7 @@ async function fetchWithTimeout(url, timeoutMs = 10000) {
     const response = await fetch(url, { cache: 'force-cache', signal: controller.signal });
     if (!response.ok) throw new Error(`HTTP ${response.status}`);
     return response;
-  } finally {
-    window.clearTimeout(timer);
-  }
+  } finally { window.clearTimeout(timer); }
 }
 
 async function loadPayload() {
@@ -126,7 +118,7 @@ async function loadPayload() {
       return extractEmbeddedPayload(source);
     } catch (error) {
       lastError = error;
-      console.warn('failed to load pinned source', url, error);
+      console.warn('failed to load vocabulary source', url, error);
     }
   }
   throw lastError || new Error('词表数据加载失败。');
@@ -147,9 +139,7 @@ function normalizeRecords(payload) {
 }
 
 function getIpa(record) {
-  return state.accent === 'en-GB'
-    ? (record.ipaUk || record.ipaUs)
-    : (record.ipaUs || record.ipaUk);
+  return state.accent === 'en-GB' ? (record.ipaUk || record.ipaUs) : (record.ipaUs || record.ipaUk);
 }
 
 function applyFilters({ resetPage = true } = {}) {
@@ -158,12 +148,10 @@ function applyFilters({ resetPage = true } = {}) {
     if (state.selectedDay && record.day !== state.selectedDay) return false;
     if (state.unfamiliarOnly && !state.unfamiliar.has(normalizeWordKey(record.word))) return false;
     if (!query) return true;
-    const haystack = `${record.word}\n${record.meaning}\n${record.section}\nday ${record.day}`.toLowerCase();
-    return haystack.includes(query);
+    return `${record.word}\n${record.meaning}\n${record.section}\nday ${record.day}`.toLowerCase().includes(query);
   });
   if (resetPage) state.page = 0;
-  const maxPage = Math.max(0, Math.ceil(state.filtered.length / PAGE_SIZE) - 1);
-  state.page = Math.min(state.page, maxPage);
+  state.page = Math.min(state.page, Math.max(0, Math.ceil(state.filtered.length / PAGE_SIZE) - 1));
   renderToolbar();
   renderList();
 }
@@ -182,14 +170,15 @@ function renderList() {
   const totalPages = Math.max(1, Math.ceil(state.filtered.length / PAGE_SIZE));
   const start = state.page * PAGE_SIZE;
   const pageItems = state.filtered.slice(start, start + PAGE_SIZE);
-  summaryEl.textContent = `${state.filtered.length} / ${state.records.length} 词`;
+  const scope = state.selectedDay ? `Day ${state.selectedDay}` : '全部 Day';
+  summaryEl.textContent = `${state.filtered.length.toLocaleString()} / ${state.records.length.toLocaleString()} · ${scope}`;
   pagerEl.hidden = state.filtered.length <= PAGE_SIZE;
-  pageStatusEl.textContent = `${state.page + 1} / ${totalPages} · ${start + 1}-${Math.min(start + PAGE_SIZE, state.filtered.length)}`;
+  pageStatusEl.textContent = `${state.page + 1} / ${totalPages} · ${state.filtered.length ? start + 1 : 0}-${Math.min(start + PAGE_SIZE, state.filtered.length)}`;
   prevPageBtn.disabled = state.page <= 0;
   nextPageBtn.disabled = state.page >= totalPages - 1;
 
   if (!pageItems.length) {
-    mainEl.innerHTML = `<div class="empty">没有匹配词。清空搜索或切换 Day 后再试。</div>`;
+    mainEl.innerHTML = '<div class="empty">没有匹配词。可以清空搜索、切换 Day 或关闭生词筛选。</div>';
     return;
   }
 
@@ -198,12 +187,7 @@ function renderList() {
   for (const record of pageItems) {
     const sectionKey = `${record.day}::${record.section}`;
     if (sectionKey !== previousSection) {
-      chunks.push(`
-        <div class="section-head">
-          <span class="section-day">Day ${record.day}</span>
-          <span class="section-title">${escapeHtml(record.section)}</span>
-        </div>
-      `);
+      chunks.push(`<div class="section-head"><span class="section-day">DAY ${record.day}</span><span class="section-title">${escapeHtml(record.section)}</span></div>`);
       previousSection = sectionKey;
     }
     const unfamiliar = state.unfamiliar.has(normalizeWordKey(record.word));
@@ -211,27 +195,29 @@ function renderList() {
     chunks.push(`
       <article class="word-row" data-record-id="${escapeHtml(record.id)}" data-playing="${state.playingId === record.id ? 'true' : 'false'}">
         <button class="word-main" type="button" data-action="speak" data-record-id="${escapeHtml(record.id)}" aria-label="播放 ${escapeHtml(record.word)} 发音">
-          <div class="word-line">
-            <span class="word">${escapeHtml(record.word)}</span>
-            ${ipa ? `<span class="ipa">${escapeHtml(ipa)}</span>` : ''}
+          <div class="word-primary">
+            <div class="word-line"><span class="word">${escapeHtml(record.word)}</span>${ipa ? `<span class="ipa">${escapeHtml(ipa)}</span>` : ''}</div>
+            <div class="row-meta">DAY ${record.day} · ${escapeHtml(record.section)}</div>
           </div>
-          <div class="meaning">${escapeHtml(record.meaning || '（中文释义待补充）')}</div>
-          <div class="row-meta">Day ${record.day} · ${escapeHtml(record.section)}</div>
+          <div class="word-secondary"><div class="meaning">${escapeHtml(record.meaning || '（中文释义待补充）')}</div></div>
         </button>
         <div class="row-actions">
-          <button class="icon-btn speaker" type="button" data-action="speak" data-record-id="${escapeHtml(record.id)}" aria-label="播放 ${escapeHtml(record.word)} 发音">▶</button>
+          <button class="icon-btn speaker" type="button" data-action="speak" data-record-id="${escapeHtml(record.id)}" aria-label="播放 ${escapeHtml(record.word)}"><span class="speaker-glyph">▶</span></button>
           <button class="icon-btn star ${unfamiliar ? 'active' : ''}" type="button" data-action="toggle-unfamiliar" data-record-id="${escapeHtml(record.id)}" aria-pressed="${unfamiliar}" aria-label="${unfamiliar ? '移出生词' : '加入生词'}">${unfamiliar ? '★' : '☆'}</button>
         </div>
-      </article>
-    `);
+      </article>`);
   }
   chunks.push('</div>');
   mainEl.innerHTML = chunks.join('');
 }
 
+function findRecord(recordId) {
+  return state.records.find((record) => record.id === recordId) || null;
+}
+
 function setPlaying(recordId) {
   state.playingId = recordId;
-  document.querySelectorAll('.word-row[data-playing="true"]').forEach((row) => row.dataset.playing = 'false');
+  document.querySelectorAll('.word-row[data-playing="true"]').forEach((row) => { row.dataset.playing = 'false'; });
   const activeRow = [...document.querySelectorAll('.word-row')].find((row) => row.dataset.recordId === recordId);
   if (activeRow) activeRow.dataset.playing = 'true';
 }
@@ -239,129 +225,114 @@ function setPlaying(recordId) {
 function stopPlayback() {
   state.speechToken += 1;
   if (state.currentAudio) {
-    try {
-      state.currentAudio.pause();
-      state.currentAudio.currentTime = 0;
-    } catch {}
+    try { state.currentAudio.pause(); state.currentAudio.currentTime = 0; } catch {}
     state.currentAudio = null;
   }
   if ('speechSynthesis' in window) window.speechSynthesis.cancel();
 }
 
-function normalizeAudioUrl(url) {
-  if (!url) return '';
-  if (url.startsWith('//')) return `https:${url}`;
-  return url;
+function normalizeSpeakText(text) {
+  return String(text || '')
+    .replace(/[–—]/g, '-')
+    .replace(/&/g, ' and ')
+    .replace(/\//g, ' or ')
+    .replace(/[()[\]{}]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
 }
 
-function audioCacheId(word, accent) {
-  return `${accent}:${normalizeWordKey(word)}`;
+function buildCloudAudioUrl(text) {
+  const voice = CLOUD_VOICES[state.accent] || CLOUD_VOICES['en-US'];
+  const params = new URLSearchParams({ voice, text: normalizeSpeakText(text) });
+  return `${CLOUD_TTS_ENDPOINT}?${params.toString()}`;
 }
 
-function saveAudioUrl(cacheId, url) {
-  state.audioUrls[cacheId] = url;
-  const keys = Object.keys(state.audioUrls);
-  if (keys.length > MAX_CACHED_AUDIO_URLS) {
-    for (const key of keys.slice(0, keys.length - MAX_CACHED_AUDIO_URLS)) delete state.audioUrls[key];
-  }
-  try { localStorage.setItem(AUDIO_URL_CACHE_KEY, JSON.stringify(state.audioUrls)); } catch {}
-}
-
-function scoreAudioCandidate(url, accent) {
-  const lower = url.toLowerCase();
-  const wantsUk = accent === 'en-GB';
-  let score = 1;
-  if (wantsUk && /(?:_gb_|-gb-|_uk_|-uk-)/.test(lower)) score += 100;
-  if (!wantsUk && /(?:_us_|-us-)/.test(lower)) score += 100;
-  if (wantsUk && /(?:_us_|-us-)/.test(lower)) score -= 30;
-  if (!wantsUk && /(?:_gb_|-gb-|_uk_|-uk-)/.test(lower)) score -= 20;
-  return score;
-}
-
-async function resolveHumanAudio(word, accent) {
-  const cacheId = audioCacheId(word, accent);
-  if (state.audioUrls[cacheId]) return state.audioUrls[cacheId];
-
-  const cleanWord = String(word || '').trim();
-  if (!cleanWord || cleanWord.length > 80) return '';
-  const response = await fetchWithTimeout(`${DICTIONARY_ENDPOINT}${encodeURIComponent(cleanWord)}`, 6500);
-  const entries = await response.json();
-  if (!Array.isArray(entries)) return '';
-  const candidates = entries.flatMap((entry) => Array.isArray(entry.phonetics) ? entry.phonetics : [])
-    .map((item) => normalizeAudioUrl(item && item.audio))
-    .filter(Boolean)
-    .sort((a, b) => scoreAudioCandidate(b, accent) - scoreAudioCandidate(a, accent));
-  const url = candidates[0] || '';
-  if (url) saveAudioUrl(cacheId, url);
-  return url;
-}
-
-function playAudioUrl(url, token) {
+function playAudioUrl(url, token, timeoutMs = 12000) {
   return new Promise((resolve, reject) => {
     const audio = new Audio(url);
     state.currentAudio = audio;
     audio.preload = 'auto';
-    audio.onended = () => {
-      if (token === state.speechToken) state.currentAudio = null;
-      resolve();
-    };
-    audio.onerror = () => {
-      if (state.currentAudio === audio) state.currentAudio = null;
-      reject(new Error('audio playback failed'));
-    };
-    audio.play().catch((error) => {
-      if (state.currentAudio === audio) state.currentAudio = null;
-      reject(error);
-    });
-  });
-}
-
-function getPreferredVoice(accent) {
-  if (!('speechSynthesis' in window)) return null;
-  const voices = window.speechSynthesis.getVoices();
-  const target = accent.toLowerCase();
-  const preferredNames = accent === 'en-GB'
-    ? ['sonia', 'ryan', 'libby', 'serena', 'daniel', 'google uk english', 'microsoft hazel']
-    : ['jenny', 'aria', 'ava', 'samantha', 'allison', 'google us english', 'microsoft zira'];
-  const score = (voice) => {
-    const name = String(voice.name || '').toLowerCase();
-    const lang = String(voice.lang || '').toLowerCase();
-    let value = 0;
-    if (lang === target) value += 80;
-    else if (lang.startsWith(target.slice(0, 2))) value += 30;
-    if (/natural|neural|online/.test(name)) value += 35;
-    const preferredIndex = preferredNames.findIndex((part) => name.includes(part));
-    if (preferredIndex >= 0) value += 70 - preferredIndex;
-    if (voice.localService) value += 3;
-    return value;
-  };
-  return voices.filter((voice) => /^en[-_]/i.test(voice.lang || '')).sort((a, b) => score(b) - score(a))[0] || null;
-}
-
-function speakWithDeviceVoice(word, token) {
-  return new Promise((resolve, reject) => {
-    if (!('speechSynthesis' in window)) {
-      reject(new Error('speech synthesis unavailable'));
-      return;
-    }
-    const utterance = new SpeechSynthesisUtterance(word);
-    utterance.lang = state.accent;
-    utterance.rate = 0.9;
-    utterance.pitch = 1;
-    const voice = getPreferredVoice(state.accent);
-    if (voice) utterance.voice = voice;
     let settled = false;
     const finish = (error) => {
       if (settled) return;
       settled = true;
       window.clearTimeout(timeout);
-      if (error) reject(error);
-      else resolve();
+      if (state.currentAudio === audio) state.currentAudio = null;
+      error ? reject(error) : resolve();
     };
-    const timeout = window.setTimeout(() => finish(), 9000);
-    utterance.onend = () => finish();
-    utterance.onerror = (event) => finish(new Error(event.error || 'speech synthesis failed'));
+    const timeout = window.setTimeout(() => finish(new Error('audio timeout')), timeoutMs);
+    audio.onended = () => finish();
+    audio.onerror = () => finish(new Error('audio failed'));
     if (token !== state.speechToken) return finish();
+    audio.play().catch((error) => finish(error));
+  });
+}
+
+function dictionaryCacheId(word) {
+  return `${state.accent}:${normalizeWordKey(word)}`;
+}
+
+function scoreDictionaryAudio(url) {
+  const lower = String(url).toLowerCase();
+  const wantsUk = state.accent === 'en-GB';
+  let score = 1;
+  if (wantsUk && /(?:_gb_|-gb-|_uk_|-uk-)/.test(lower)) score += 100;
+  if (!wantsUk && /(?:_us_|-us-)/.test(lower)) score += 100;
+  return score;
+}
+
+async function resolveDictionaryAudio(word) {
+  const cacheId = dictionaryCacheId(word);
+  if (state.dictionaryAudio[cacheId]) return state.dictionaryAudio[cacheId];
+  const response = await fetchWithTimeout(`${DICTIONARY_ENDPOINT}${encodeURIComponent(word)}`, 6500);
+  const entries = await response.json();
+  if (!Array.isArray(entries)) return '';
+  const candidates = entries.flatMap((entry) => Array.isArray(entry.phonetics) ? entry.phonetics : [])
+    .map((item) => String(item?.audio || '').replace(/^\/\//, 'https://'))
+    .filter(Boolean)
+    .sort((a, b) => scoreDictionaryAudio(b) - scoreDictionaryAudio(a));
+  const url = candidates[0] || '';
+  if (url) {
+    state.dictionaryAudio[cacheId] = url;
+    const keys = Object.keys(state.dictionaryAudio);
+    if (keys.length > MAX_CACHED_AUDIO_URLS) keys.slice(0, keys.length - MAX_CACHED_AUDIO_URLS).forEach((key) => delete state.dictionaryAudio[key]);
+    try { localStorage.setItem(AUDIO_URL_CACHE_KEY, JSON.stringify(state.dictionaryAudio)); } catch {}
+  }
+  return url;
+}
+
+function getPreferredDeviceVoice() {
+  if (!('speechSynthesis' in window)) return null;
+  const target = state.accent.toLowerCase();
+  const preferred = state.accent === 'en-GB' ? ['sonia', 'libby', 'serena', 'daniel'] : ['jenny', 'aria', 'ava', 'samantha'];
+  return window.speechSynthesis.getVoices()
+    .filter((voice) => /^en[-_]/i.test(voice.lang || ''))
+    .sort((a, b) => {
+      const score = (voice) => {
+        const name = String(voice.name || '').toLowerCase();
+        const lang = String(voice.lang || '').toLowerCase();
+        let value = lang === target ? 80 : (lang.startsWith('en') ? 20 : 0);
+        if (/natural|neural|online/.test(name)) value += 35;
+        const index = preferred.findIndex((part) => name.includes(part));
+        if (index >= 0) value += 60 - index;
+        return value;
+      };
+      return score(b) - score(a);
+    })[0] || null;
+}
+
+function speakWithDeviceVoice(text, token) {
+  return new Promise((resolve, reject) => {
+    if (!('speechSynthesis' in window)) return reject(new Error('speech synthesis unavailable'));
+    const utterance = new SpeechSynthesisUtterance(normalizeSpeakText(text));
+    utterance.lang = state.accent;
+    utterance.rate = 0.92;
+    const voice = getPreferredDeviceVoice();
+    if (voice) utterance.voice = voice;
+    const timeout = window.setTimeout(resolve, 9000);
+    utterance.onend = () => { window.clearTimeout(timeout); resolve(); };
+    utterance.onerror = (event) => { window.clearTimeout(timeout); reject(new Error(event.error || 'speech failed')); };
+    if (token !== state.speechToken) return resolve();
     window.speechSynthesis.speak(utterance);
   });
 }
@@ -371,19 +342,24 @@ async function playRecord(record) {
   const token = state.speechToken;
   setPlaying(record.id);
   try {
-    const humanAudioUrl = await resolveHumanAudio(record.word, state.accent).catch(() => '');
-    if (token !== state.speechToken) return;
-    if (humanAudioUrl) {
-      try {
-        showToast('真人词典录音');
-        await playAudioUrl(humanAudioUrl, token);
-        return;
-      } catch {
-        delete state.audioUrls[audioCacheId(record.word, state.accent)];
-        try { localStorage.setItem(AUDIO_URL_CACHE_KEY, JSON.stringify(state.audioUrls)); } catch {}
-      }
+    voiceStatusEl.textContent = `自然${state.accent === 'en-GB' ? '英音' : '美音'} · ${CLOUD_VOICES[state.accent]}`;
+    showToast('正在加载自然声线…');
+    try {
+      await playAudioUrl(buildCloudAudioUrl(record.word), token);
+      return;
+    } catch (cloudError) {
+      console.warn('cloud voice failed', cloudError);
     }
-    showToast(`${state.accent === 'en-GB' ? '英音' : '美音'} · 设备备用声线`);
+
+    const dictionaryUrl = await resolveDictionaryAudio(record.word).catch(() => '');
+    if (token !== state.speechToken) return;
+    if (dictionaryUrl) {
+      showToast('云端声线不可用，改用词典录音');
+      await playAudioUrl(dictionaryUrl, token);
+      return;
+    }
+
+    showToast('云端暂不可用，使用设备备用声线');
     await speakWithDeviceVoice(record.word, token);
   } catch (error) {
     console.warn('pronunciation failed', error);
@@ -405,13 +381,19 @@ function showToast(message) {
   toastTimer = window.setTimeout(() => toastEl.classList.remove('show'), 1800);
 }
 
-function findRecord(recordId) {
-  return state.records.find((record) => record.id === recordId) || null;
-}
-
 function updateAccentButtons() {
   document.getElementById('accent-us').classList.toggle('active', state.accent === 'en-US');
   document.getElementById('accent-uk').classList.toggle('active', state.accent === 'en-GB');
+  voiceStatusEl.textContent = `自然${state.accent === 'en-GB' ? '英音' : '美音'} · ${CLOUD_VOICES[state.accent]}`;
+}
+
+function goToPage(delta) {
+  const maxPage = Math.max(0, Math.ceil(state.filtered.length / PAGE_SIZE) - 1);
+  const next = Math.max(0, Math.min(maxPage, state.page + delta));
+  if (next === state.page) return;
+  state.page = next;
+  renderList();
+  window.scrollTo({ top: 0, behavior: 'smooth' });
 }
 
 toolbarEl.addEventListener('click', (event) => {
@@ -420,7 +402,6 @@ toolbarEl.addEventListener('click', (event) => {
   if (button.dataset.day !== undefined) {
     state.selectedDay = Number(button.dataset.day) || 0;
     applyFilters();
-    window.scrollTo({ top: 0, behavior: 'smooth' });
     return;
   }
   if (button.dataset.action === 'unfamiliar-filter') {
@@ -434,14 +415,10 @@ mainEl.addEventListener('click', (event) => {
   if (!button) return;
   const record = findRecord(button.dataset.recordId);
   if (!record) return;
-  if (button.dataset.action === 'speak') {
-    playRecord(record);
-    return;
-  }
+  if (button.dataset.action === 'speak') return playRecord(record);
   if (button.dataset.action === 'toggle-unfamiliar') {
     const key = normalizeWordKey(record.word);
-    if (state.unfamiliar.has(key)) state.unfamiliar.delete(key);
-    else state.unfamiliar.add(key);
+    state.unfamiliar.has(key) ? state.unfamiliar.delete(key) : state.unfamiliar.add(key);
     saveWordSet(UNFAMILIAR_STORAGE_KEY, state.unfamiliar);
     applyFilters({ resetPage: false });
   }
@@ -456,44 +433,37 @@ document.querySelector('.accent-switch').addEventListener('click', (event) => {
   const button = event.target.closest('button[data-accent]');
   if (!button) return;
   state.accent = button.dataset.accent === 'en-GB' ? 'en-GB' : 'en-US';
-  localStorage.setItem(ACCENT_STORAGE_KEY, state.accent);
+  try { localStorage.setItem(ACCENT_STORAGE_KEY, state.accent); } catch {}
   stopPlayback();
   updateAccentButtons();
   renderList();
 });
 
-prevPageBtn.addEventListener('click', () => {
-  if (state.page <= 0) return;
-  state.page -= 1;
-  renderList();
-  window.scrollTo({ top: 0, behavior: 'smooth' });
-});
+prevPageBtn.addEventListener('click', () => goToPage(-1));
+nextPageBtn.addEventListener('click', () => goToPage(1));
 
-nextPageBtn.addEventListener('click', () => {
-  const maxPage = Math.max(0, Math.ceil(state.filtered.length / PAGE_SIZE) - 1);
-  if (state.page >= maxPage) return;
-  state.page += 1;
-  renderList();
-  window.scrollTo({ top: 0, behavior: 'smooth' });
+document.addEventListener('keydown', (event) => {
+  const typing = /INPUT|TEXTAREA/.test(document.activeElement?.tagName || '');
+  if (event.key === '/' && !typing) { event.preventDefault(); searchEl.focus(); return; }
+  if (event.key === 'Escape' && document.activeElement === searchEl && searchEl.value) {
+    searchEl.value = ''; state.query = ''; applyFilters(); return;
+  }
+  if (!typing && event.key === 'ArrowLeft') goToPage(-1);
+  if (!typing && event.key === 'ArrowRight') goToPage(1);
 });
 
 async function init() {
   try {
     state.unfamiliar = loadWordSet(UNFAMILIAR_STORAGE_KEY);
-    state.payload = await loadPayload();
-    state.records = normalizeRecords(state.payload);
+    const payload = await loadPayload();
+    state.records = normalizeRecords(payload);
     if (!state.records.length) throw new Error('词表为空。');
     updateAccentButtons();
     applyFilters();
   } catch (error) {
     console.error(error);
     summaryEl.textContent = '加载失败';
-    mainEl.innerHTML = `
-      <div class="error">
-        <strong>词表没有载入。</strong><br />
-        <span>${escapeHtml(error instanceof Error ? error.message : '请稍后重试。')}</span>
-      </div>
-    `;
+    mainEl.innerHTML = `<div class="error"><div><strong>词表没有载入。</strong><br>${escapeHtml(error instanceof Error ? error.message : '请刷新后重试。')}</div></div>`;
   }
 }
 
