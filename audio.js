@@ -3,6 +3,7 @@
 const WIKTIONARY_ENDPOINT = 'https://en.wiktionary.org/w/api.php';
 const HUMAN_AUDIO_CACHE_KEY = 'hearing_day1_21_human_audio_v3';
 const HUMAN_AUDIO_CACHE_LIMIT = 600;
+const HUMAN_AUDIO_PLAYBACK_RATE = 1.08;
 const humanAudioCache = loadJsonObject(HUMAN_AUDIO_CACHE_KEY);
 
 function humanAudioCacheId(source, word) {
@@ -84,12 +85,39 @@ async function resolveHumanRecording(word) {
   return { url: '', source: '' };
 }
 
+function playHumanAudioUrl(url, token, timeoutMs = 12000) {
+  return new Promise((resolve, reject) => {
+    const audio = new Audio(url);
+    state.currentAudio = audio;
+    audio.preload = 'auto';
+    audio.defaultPlaybackRate = HUMAN_AUDIO_PLAYBACK_RATE;
+    audio.playbackRate = HUMAN_AUDIO_PLAYBACK_RATE;
+    audio.preservesPitch = true;
+    audio.mozPreservesPitch = true;
+    audio.webkitPreservesPitch = true;
+
+    let settled = false;
+    const finish = (error) => {
+      if (settled) return;
+      settled = true;
+      window.clearTimeout(timeout);
+      if (state.currentAudio === audio) state.currentAudio = null;
+      error ? reject(error) : resolve();
+    };
+    const timeout = window.setTimeout(() => finish(new Error('audio timeout')), timeoutMs);
+    audio.onended = () => finish();
+    audio.onerror = () => finish(new Error('audio failed'));
+    if (token !== state.speechToken) return finish();
+    audio.play().catch((error) => finish(error));
+  });
+}
+
 playRecord = async function playHumanRecording(record) {
   stopPlayback();
   const token = state.speechToken;
   setPlaying(record.id);
   try {
-    voiceStatusEl.textContent = `真人${state.accent === 'en-GB' ? '英音' : '美音'}优先 · 不用系统声线`;
+    voiceStatusEl.textContent = `真人${state.accent === 'en-GB' ? '英音' : '美音'}优先 · 1.08× 播放`;
     showToast('正在查找真人录音…');
     const recording = await resolveHumanRecording(record.word);
     if (token !== state.speechToken) return;
@@ -97,8 +125,8 @@ playRecord = async function playHumanRecording(record) {
       showToast('暂无真人录音，已避免使用僵硬的系统声线');
       return;
     }
-    showToast(recording.source);
-    await playAudioUrl(recording.url, token);
+    showToast(`${recording.source} · 1.08×`);
+    await playHumanAudioUrl(recording.url, token);
   } catch (error) {
     console.warn('human recording failed', error);
     showToast('真人录音暂时无法播放');
@@ -114,5 +142,5 @@ playRecord = async function playHumanRecording(record) {
 updateAccentButtons = function updateHumanAccentButtons() {
   document.getElementById('accent-us').classList.toggle('active', state.accent === 'en-US');
   document.getElementById('accent-uk').classList.toggle('active', state.accent === 'en-GB');
-  voiceStatusEl.textContent = `真人${state.accent === 'en-GB' ? '英音' : '美音'}优先 · 不用系统声线`;
+  voiceStatusEl.textContent = `真人${state.accent === 'en-GB' ? '英音' : '美音'}优先 · 1.08× 播放`;
 };
