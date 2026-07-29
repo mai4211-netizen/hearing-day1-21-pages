@@ -181,6 +181,24 @@ getPreferredDeviceVoice = function getFastDeviceVoice() {
     })[0] || null;
 };
 
+speakWithDeviceVoice = function speakWithFastDeviceVoice(text, token) {
+  return new Promise((resolve, reject) => {
+    if (!('speechSynthesis' in window)) return reject(new Error('speech synthesis unavailable'));
+    const utterance = new SpeechSynthesisUtterance(normalizeSpeakText(text));
+    utterance.lang = state.accent;
+    utterance.rate = 1.02;
+    utterance.volume = 1;
+    const voice = getPreferredDeviceVoice();
+    if (voice) utterance.voice = voice;
+    const timeout = window.setTimeout(() => reject(new Error('speech timeout')), 6500);
+    utterance.onend = () => { window.clearTimeout(timeout); resolve(); };
+    utterance.onerror = (event) => { window.clearTimeout(timeout); reject(new Error(event.error || 'speech failed')); };
+    if (token !== state.speechToken) { window.clearTimeout(timeout); return resolve(); }
+    window.speechSynthesis.resume();
+    window.speechSynthesis.speak(utterance);
+  });
+};
+
 function finishPlaying(record, token) {
   if (token !== state.speechToken) return;
   state.playingId = '';
@@ -196,30 +214,22 @@ playRecord = async function playInstantRecording(record) {
 
   const cachedHuman = getCachedHumanRecording(record.word).url;
   const localUrl = buildLocalAudioPath(record.word);
+  const attempts = [];
+
+  if (cachedHuman) attempts.push(() => playRateAdjustedAudio(cachedHuman, token, HUMAN_AUDIO_PLAYBACK_RATE));
+  if (state.accent === 'en-US' && localUrl) attempts.push(() => playRateAdjustedAudio(localUrl, token, LOCAL_AUDIO_PLAYBACK_RATE));
+  attempts.push(() => speakWithDeviceVoice(record.word, token));
+  if (state.accent === 'en-GB' && localUrl) attempts.push(() => playRateAdjustedAudio(localUrl, token, LOCAL_AUDIO_PLAYBACK_RATE));
 
   try {
-    if (cachedHuman) {
-      await playRateAdjustedAudio(cachedHuman, token, HUMAN_AUDIO_PLAYBACK_RATE);
-      return;
-    }
-
-    if (state.accent === 'en-US' && localUrl) {
-      await playRateAdjustedAudio(localUrl, token, LOCAL_AUDIO_PLAYBACK_RATE);
-      return;
-    }
-
-    try {
-      await speakWithDeviceVoice(record.word, token);
-      return;
-    } catch (deviceError) {
-      console.warn('device voice failed', deviceError);
-    }
-
-    if (localUrl) await playRateAdjustedAudio(localUrl, token, LOCAL_AUDIO_PLAYBACK_RATE);
-  } catch (error) {
-    console.warn('instant pronunciation failed', error);
-    if (token === state.speechToken && !localUrl) {
-      try { await speakWithDeviceVoice(record.word, token); } catch {}
+    for (const attempt of attempts) {
+      if (token !== state.speechToken) return;
+      try {
+        await attempt();
+        return;
+      } catch (error) {
+        console.warn('pronunciation source failed', error);
+      }
     }
   } finally {
     finishPlaying(record, token);
