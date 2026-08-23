@@ -49,7 +49,7 @@ function waitForRecords(timeoutMs = 12000) {
   return new Promise((resolve, reject) => {
     const tick = () => {
       if (typeof state !== 'undefined' && Array.isArray(state.records) && state.records.length) return resolve();
-      if (Date.now() - started >= timeoutMs) return reject(new Error('词表还没有载入')); 
+      if (Date.now() - started >= timeoutMs) return reject(new Error('词表还没有载入'));
       window.setTimeout(tick, 120);
     };
     tick();
@@ -129,6 +129,91 @@ function normalizeDictationAnswer(value) {
     .toLowerCase()
     .replace(/[‘’]/g, "'")
     .replace(/\s+/g, ' ');
+}
+
+function buildSpellingDiff(given, expected) {
+  const a = [...normalizeDictationAnswer(given)];
+  const b = [...normalizeDictationAnswer(expected)];
+  const rows = a.length + 1;
+  const cols = b.length + 1;
+  const dp = Array.from({ length: rows }, () => Array(cols).fill(0));
+
+  for (let i = 0; i < rows; i += 1) dp[i][0] = i;
+  for (let j = 0; j < cols; j += 1) dp[0][j] = j;
+
+  for (let i = 1; i < rows; i += 1) {
+    for (let j = 1; j < cols; j += 1) {
+      const same = a[i - 1] === b[j - 1];
+      dp[i][j] = Math.min(
+        dp[i - 1][j] + 1,
+        dp[i][j - 1] + 1,
+        dp[i - 1][j - 1] + (same ? 0 : 1),
+      );
+    }
+  }
+
+  const ops = [];
+  let i = a.length;
+  let j = b.length;
+  while (i > 0 || j > 0) {
+    if (i > 0 && j > 0 && a[i - 1] === b[j - 1] && dp[i][j] === dp[i - 1][j - 1]) {
+      ops.push({ type: 'same', given: a[i - 1], expected: b[j - 1] });
+      i -= 1;
+      j -= 1;
+      continue;
+    }
+    if (i > 0 && j > 0 && dp[i][j] === dp[i - 1][j - 1] + 1) {
+      ops.push({ type: 'replace', given: a[i - 1], expected: b[j - 1] });
+      i -= 1;
+      j -= 1;
+      continue;
+    }
+    if (i > 0 && dp[i][j] === dp[i - 1][j] + 1) {
+      ops.push({ type: 'extra', given: a[i - 1], expected: '' });
+      i -= 1;
+      continue;
+    }
+    if (j > 0) {
+      ops.push({ type: 'missing', given: '', expected: b[j - 1] });
+      j -= 1;
+    }
+  }
+
+  return ops.reverse();
+}
+
+function renderSpellingDiff(given, expected) {
+  const ops = buildSpellingDiff(given, expected);
+  const typed = [];
+  const target = [];
+
+  for (const op of ops) {
+    if (op.type === 'same') {
+      typed.push(`<span class="spell-char same">${escapeHtml(op.given)}</span>`);
+      target.push(`<span class="spell-char same">${escapeHtml(op.expected)}</span>`);
+    } else if (op.type === 'replace') {
+      typed.push(`<span class="spell-char wrong" title="这里写错了">${escapeHtml(op.given)}</span>`);
+      target.push(`<span class="spell-char fix">${escapeHtml(op.expected)}</span>`);
+    } else if (op.type === 'extra') {
+      typed.push(`<span class="spell-char extra" title="多写了这个字符">${escapeHtml(op.given)}</span>`);
+      target.push('<span class="spell-char gap" aria-hidden="true">·</span>');
+    } else if (op.type === 'missing') {
+      typed.push('<span class="spell-char missing" title="这里漏了一个字符">＿</span>');
+      target.push(`<span class="spell-char fix">${escapeHtml(op.expected)}</span>`);
+    }
+  }
+
+  return `
+    <div class="dictation-diff" aria-label="拼写对比">
+      <div class="dictation-diff-row">
+        <span class="dictation-diff-label">你写的</span>
+        <span class="dictation-diff-word">${typed.join('')}</span>
+      </div>
+      <div class="dictation-diff-row answer-row">
+        <span class="dictation-diff-label">正确</span>
+        <span class="dictation-diff-word">${target.join('')}</span>
+      </div>
+    </div>`;
 }
 
 function currentScopeLabel() {
@@ -254,6 +339,7 @@ function nextDictationWord() {
   const input = document.getElementById('dictation-input');
   input.disabled = false;
   input.value = '';
+  input.classList.remove('is-correct', 'is-wrong');
   document.getElementById('dictation-feedback').hidden = true;
   document.getElementById('dictation-feedback').className = 'dictation-feedback';
   document.getElementById('dictation-check').hidden = false;
@@ -277,7 +363,8 @@ function submitDictation(skip) {
   if (!record || dictationState.answered) return;
   const input = document.getElementById('dictation-input');
   const expected = normalizeDictationAnswer(record.word);
-  const given = normalizeDictationAnswer(input.value);
+  const rawGiven = input.value;
+  const given = normalizeDictationAnswer(rawGiven);
   if (!skip && !given) {
     input.focus();
     return;
@@ -289,12 +376,19 @@ function submitDictation(skip) {
   recordResult(record, correct);
 
   input.disabled = true;
+  input.classList.toggle('is-correct', correct);
+  input.classList.toggle('is-wrong', !correct);
   const feedback = document.getElementById('dictation-feedback');
   feedback.hidden = false;
   feedback.className = `dictation-feedback ${correct ? 'correct' : 'wrong'}`;
-  feedback.innerHTML = correct
-    ? `<strong>正确</strong><span class="dictation-answer">${escapeHtml(record.word)}</span><span class="dictation-meaning">${escapeHtml(record.meaning || '')}</span>`
-    : `<strong>${skip ? '已记为错词' : '拼写不对'}</strong><span class="dictation-answer">${escapeHtml(record.word)}</span><span class="dictation-meaning">${escapeHtml(record.meaning || '')}</span>`;
+
+  if (correct) {
+    feedback.innerHTML = `<strong>正确</strong><span class="dictation-answer">${escapeHtml(record.word)}</span><span class="dictation-meaning">${escapeHtml(record.meaning || '')}</span>`;
+  } else if (skip) {
+    feedback.innerHTML = `<strong>已记为错词</strong><span class="dictation-answer">${escapeHtml(record.word)}</span><span class="dictation-meaning">${escapeHtml(record.meaning || '')}</span>`;
+  } else {
+    feedback.innerHTML = `<strong>拼写不对</strong>${renderSpellingDiff(rawGiven, record.word)}<span class="dictation-meaning">${escapeHtml(record.meaning || '')}</span>`;
+  }
 
   document.getElementById('dictation-check').hidden = true;
   document.getElementById('dictation-skip').hidden = true;
