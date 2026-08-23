@@ -181,7 +181,17 @@
   border-color: var(--accent);
   box-shadow: 0 0 0 4px rgba(53,111,246,0.10);
 }
-.dictation-input[disabled] { color: var(--soft); background: var(--surface-soft); }
+.dictation-input[disabled] { color: var(--ink); background: #fff; opacity: 1; }
+.dictation-input.is-correct {
+  border-color: #8fd0ad;
+  background: #f5fcf8;
+  box-shadow: 0 0 0 3px rgba(45,175,116,0.09);
+}
+.dictation-input.is-wrong {
+  border-color: #e2a4aa;
+  background: #fff8f8;
+  box-shadow: 0 0 0 3px rgba(195,79,88,0.08);
+}
 .dictation-actions {
   display: grid;
   grid-template-columns: 1fr 1.4fr;
@@ -226,6 +236,67 @@
 }
 .dictation-meaning { color: var(--muted); font-weight: 700; }
 
+.dictation-diff {
+  display: grid;
+  gap: 8px;
+  margin: 10px 0 8px;
+  padding: 12px;
+  border-radius: 12px;
+  background: rgba(255,255,255,0.72);
+  border: 1px solid rgba(195,79,88,0.15);
+}
+.dictation-diff-row {
+  display: grid;
+  grid-template-columns: 48px minmax(0, 1fr);
+  align-items: baseline;
+  gap: 8px;
+}
+.dictation-diff-label {
+  color: var(--soft);
+  font-size: 10px;
+  font-weight: 900;
+  white-space: nowrap;
+}
+.dictation-diff-word {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  min-width: 0;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 20px;
+  font-weight: 900;
+  line-height: 1.5;
+  letter-spacing: 0.04em;
+}
+.spell-char {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 0.72em;
+  border-radius: 4px;
+}
+.spell-char.same { color: var(--ink); }
+.spell-char.wrong,
+.spell-char.extra {
+  color: #b43743;
+  background: #ffe1e4;
+  text-decoration: underline;
+  text-decoration-thickness: 2px;
+  text-underline-offset: 3px;
+}
+.spell-char.extra { text-decoration-style: wavy; }
+.spell-char.missing {
+  color: #b43743;
+  background: #ffe1e4;
+  border-bottom: 2px solid #b43743;
+}
+.spell-char.fix {
+  color: #176641;
+  background: #dcf4e7;
+}
+.spell-char.gap { color: #c7ccd3; }
+.answer-row .dictation-diff-label { color: #5f8e72; }
+
 .dictation-empty {
   margin-top: 15px;
   padding: 28px 20px;
@@ -256,4 +327,6 @@
   .dictation-body { padding: 0 18px 22px; }
   .dictation-card { padding: 22px 16px 18px; }
   .dictation-scope-btn { min-height: 44px; }
+  .dictation-diff-row { grid-template-columns: 42px minmax(0, 1fr); gap: 6px; }
+  .dictation-diff-word { font-size: 18px; }
 }
