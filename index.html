@@ -14,8 +14,80 @@
     .word-secondary { padding-top: 11px; padding-bottom: 11px; }
 
     @media (max-width: 760px) {
+      .app-shell {
+        width: min(calc(100% - 12px), 1180px);
+        margin-top: 4px;
+      }
+      .app-header {
+        top: 4px;
+        padding: 10px 12px 9px;
+        border-radius: 16px;
+      }
+      .topline { gap: 10px; min-height: 30px; }
+      .brand { gap: 8px; }
+      .brand-mark {
+        width: 30px;
+        height: 30px;
+        border-radius: 9px;
+        font-size: 13px;
+        box-shadow: none;
+      }
+      .eyebrow { display: none; }
+      h1 { font-size: 20px; line-height: 1.1; }
+      .control-grid { margin-top: 8px; gap: 6px; }
+      .search-control {
+        height: 40px;
+        border-radius: 11px;
+      }
+      .search-icon {
+        padding-left: 12px;
+        font-size: 19px;
+      }
+      .search-control input {
+        padding-left: 8px;
+        font-size: 14px;
+      }
+      .accent-switch {
+        width: 88px;
+        height: 40px;
+        padding: 3px;
+        border-radius: 11px;
+      }
+      .accent-btn { border-radius: 8px; font-size: 11px; }
+      .toolbar {
+        margin-top: 8px;
+        gap: 6px;
+        padding-bottom: 0;
+      }
+      .chip {
+        min-height: 30px;
+        padding: 0 10px;
+        font-size: 11px;
+      }
+      .status-strip { display: none; }
+      main { margin-top: 8px; }
       .word-primary { padding-bottom: 2px; }
       .word-secondary { padding-top: 2px; padding-bottom: 10px; }
+    }
+
+    @media (max-width: 430px) {
+      .app-shell {
+        width: calc(100% - 8px);
+        margin-top: 2px;
+      }
+      .app-header {
+        top: 2px;
+        padding: 8px 10px;
+        border-radius: 14px;
+      }
+      .brand-mark { display: none; }
+      .brand { gap: 0; }
+      h1 { font-size: 19px; }
+      .control-grid { margin-top: 7px; }
+      .search-control { height: 38px; }
+      .accent-switch { width: 82px; height: 38px; }
+      .toolbar { margin-top: 7px; }
+      .chip { min-height: 29px; padding: 0 9px; }
     }
   </style>
 </head>
