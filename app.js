@@ -110,7 +110,19 @@ async function fetchWithTimeout(url, timeoutMs = 10000) {
   } finally { window.clearTimeout(timer); }
 }
 
+function getBundledPayload() {
+  const payload = globalThis.__HEARING_DAY1_21_APP__;
+  return payload && Array.isArray(payload.words) && payload.words.length ? payload : null;
+}
+
 async function loadPayload() {
+  const bundled = getBundledPayload();
+  if (bundled) return bundled;
+
+  if (!navigator.onLine) {
+    throw new Error('本地词表数据未载入。请联网刷新一次完成离线安装。');
+  }
+
   let lastError = null;
   for (const url of SOURCE_URLS) {
     try {
