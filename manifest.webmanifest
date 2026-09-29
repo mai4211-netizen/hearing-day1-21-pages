@@ -1,0 +1,19 @@
+{
+  "name": "21天场景词汇听写",
+  "short_name": "21天听写",
+  "description": "21天场景词汇、听写与离线发音",
+  "start_url": "./index.html",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#eceff3",
+  "theme_color": "#152033",
+  "lang": "zh-CN",
+  "icons": [
+    {
+      "src": "./icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}
