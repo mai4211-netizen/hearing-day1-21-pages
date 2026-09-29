@@ -4,7 +4,12 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <meta name="theme-color" content="#152033" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+  <meta name="apple-mobile-web-app-title" content="21天听写" />
   <title>21天场景词汇 · List</title>
+  <link rel="manifest" href="./manifest.webmanifest" />
+  <link rel="icon" href="./icon.svg" type="image/svg+xml" />
   <link rel="stylesheet" href="./styles.css" />
   <link rel="stylesheet" href="./dictation.css" />
   <style>
@@ -125,6 +130,8 @@
         <span id="voice-status">本地录音即时播放 · 设备声线备用</span>
         <span class="status-separator">·</span>
         <span>真人录音后台缓存，不阻塞点击</span>
+        <span class="status-separator">·</span>
+        <span id="offline-status">离线包检测中…</span>
       </div>
     </header>
 
@@ -143,11 +150,13 @@
   </div>
 
   <div class="toast" id="toast" role="status" aria-live="polite"></div>
+  <script src="./data.js" defer></script>
   <script src="./app.js" defer></script>
   <script src="./audio.js" defer></script>
   <script src="./dictation.js" defer></script>
   <script src="./dictation-memory.js" defer></script>
   <script src="./dictation-autoplay.js" defer></script>
   <script src="./dictation-shortcuts.js" defer></script>
+  <script src="./pwa.js" defer></script>
 </body>
 </html>
