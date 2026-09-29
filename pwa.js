@@ -23,6 +23,7 @@ function requestAudioPack(registration) {
   if (!worker) return;
   offlinePackStarted = true;
   setOfflineStatus('正在准备离线发音…');
+  quietToast('首次正在准备离线发音，请保持联网直到提示完成');
   worker.postMessage({ type: 'CACHE_AUDIO_PACK' });
 }
 
@@ -85,9 +86,11 @@ async function initPwa() {
 
     window.addEventListener('online', () => {
       setOfflineStatus('已联网 · 检查离线包');
+      if (typeof updateAccentButtons === 'function') updateAccentButtons();
       requestAudioPack(registration);
     });
     window.addEventListener('offline', () => {
+      if (typeof updateAccentButtons === 'function') updateAccentButtons();
       setOfflineStatus(localStorage.getItem(OFFLINE_PACK_FLAG) === 'ready' ? '已离线 · 本地可用' : '已离线 · 离线包未完整');
     });
   } catch (error) {
