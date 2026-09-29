@@ -2,7 +2,7 @@
 
 importScripts('./data.js');
 
-const CORE_CACHE = 'hearing-core-v2';
+const CORE_CACHE = 'hearing-core-v3';
 const AUDIO_CACHE = 'hearing-audio-v1';
 const CORE_PREFIX = 'hearing-core-';
 
@@ -44,6 +44,7 @@ self.addEventListener('activate', (event) => {
     await Promise.all(names
       .filter((name) => name.startsWith(CORE_PREFIX) && name !== CORE_CACHE)
       .map((name) => caches.delete(name)));
+    await pruneAudioCache();
     await self.clients.claim();
   })());
 });
@@ -98,7 +99,18 @@ async function getAudioStatus() {
   for (const request of keys) {
     if (wanted.has(new URL(request.url).pathname)) cached += 1;
   }
-  return { cached, total: AUDIO_URLS.length, complete: AUDIO_URLS.length > 0 && cached >= AUDIO_URLS.length };
+  const total = AUDIO_URLS.length;
+  return { cached, total, missing: Math.max(0, total - cached), complete: total > 0 && cached >= total };
+}
+
+async function pruneAudioCache() {
+  const cache = await caches.open(AUDIO_CACHE);
+  const wanted = new Set(AUDIO_URLS.map((url) => new URL(url).pathname));
+  const keys = await cache.keys();
+  await Promise.all(keys.map((request) => {
+    const path = new URL(request.url).pathname;
+    return wanted.has(path) ? Promise.resolve(false) : cache.delete(request);
+  }));
 }
 
 function reply(event, payload) {
@@ -110,31 +122,57 @@ function reply(event, payload) {
   } catch {}
 }
 
+function delay(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
 async function cacheAudioFile(cache, url) {
   const existing = await cache.match(url);
   if (existing) return true;
-  try {
-    const response = await fetch(url, { cache: 'no-cache' });
-    if (!response || (!response.ok && response.type !== 'opaque')) return false;
-    await cache.put(url, response.clone());
-    return true;
-  } catch {
-    return false;
+
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    try {
+      const response = await fetch(url, { cache: 'reload' });
+      if (response && (response.ok || response.type === 'opaque')) {
+        await cache.put(url, response.clone());
+        return true;
+      }
+    } catch {}
+    if (attempt < 2) await delay(250 * (attempt + 1));
   }
+  return false;
+}
+
+async function getMissingAudioUrls(cache) {
+  const missing = [];
+  for (const url of AUDIO_URLS) {
+    if (!(await cache.match(url))) missing.push(url);
+  }
+  return missing;
 }
 
 async function cacheAudioPack(notify) {
   const cache = await caches.open(AUDIO_CACHE);
-  const batchSize = 8;
+  await pruneAudioCache();
+
+  const initial = await getAudioStatus();
+  if (initial.complete) {
+    notify({ type: 'offline-ready', ...initial, failed: 0 });
+    return initial;
+  }
+
+  const missingUrls = await getMissingAudioUrls(cache);
+  const batchSize = 6;
   let processed = 0;
   let failed = 0;
 
-  for (let i = 0; i < AUDIO_URLS.length; i += batchSize) {
-    const batch = AUDIO_URLS.slice(i, i + batchSize);
+  for (let i = 0; i < missingUrls.length; i += batchSize) {
+    const batch = missingUrls.slice(i, i + batchSize);
     const results = await Promise.all(batch.map((url) => cacheAudioFile(cache, url)));
     processed += results.length;
     failed += results.filter((ok) => !ok).length;
-    if (processed === AUDIO_URLS.length || processed % 80 === 0) {
+
+    if (processed === missingUrls.length || processed % 48 === 0) {
       const status = await getAudioStatus();
       notify({ type: 'offline-progress', ...status, processed, failed });
     }
