@@ -110,6 +110,7 @@ async function resolveHumanRecording(word) {
 }
 
 function warmHumanRecording(word) {
+  if (!navigator.onLine) return;
   const key = `${state.accent}:${normalizeWordKey(word)}`;
   if (!key || pendingHumanLookups.has(key) || getCachedHumanRecording(word).url) return;
   pendingHumanLookups.add(key);
@@ -163,15 +164,17 @@ getPreferredDeviceVoice = function getFastDeviceVoice() {
   const preferred = state.accent === 'en-GB'
     ? ['google uk english female', 'google uk english male', 'sonia', 'libby', 'serena', 'daniel']
     : ['google us english', 'jenny', 'aria', 'ava', 'samantha'];
-  return deviceVoices
-    .filter((voice) => /^en[-_]/i.test(voice.lang || ''))
+  const englishVoices = deviceVoices.filter((voice) => /^en[-_]/i.test(voice.lang || ''));
+  const localVoices = englishVoices.filter((voice) => voice.localService);
+  const voicePool = !navigator.onLine && localVoices.length ? localVoices : englishVoices;
+  return voicePool
     .sort((a, b) => {
       const score = (voice) => {
         const name = String(voice.name || '').toLowerCase();
         const lang = String(voice.lang || '').toLowerCase();
         let value = lang === target ? 120 : (lang.startsWith(target.slice(0, 2)) ? 30 : 0);
-        if (voice.localService) value += 45;
-        if (/google/.test(name)) value += 35;
+        if (voice.localService) value += navigator.onLine ? 45 : 140;
+        if (navigator.onLine && /google/.test(name)) value += 35;
         if (/natural|neural/.test(name)) value += 30;
         const index = preferred.findIndex((part) => name.includes(part));
         if (index >= 0) value += 80 - index;
@@ -239,6 +242,12 @@ playRecord = async function playInstantRecording(record) {
 updateAccentButtons = function updateInstantAccentButtons() {
   document.getElementById('accent-us').classList.toggle('active', state.accent === 'en-US');
   document.getElementById('accent-uk').classList.toggle('active', state.accent === 'en-GB');
+  if (!navigator.onLine) {
+    voiceStatusEl.textContent = state.accent === 'en-US'
+      ? '离线 · US 本地录音优先 · 设备声线备用'
+      : '离线 · UK 本地设备声线优先';
+    return;
+  }
   voiceStatusEl.textContent = state.accent === 'en-US'
     ? 'US 本地录音即时播放 · 设备声线备用'
     : 'UK 设备声线即时播放 · 真人录音后台缓存';
