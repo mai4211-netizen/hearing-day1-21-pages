@@ -2,7 +2,7 @@
 
 importScripts('./data.js');
 
-const CORE_CACHE = 'hearing-core-v4';
+const CORE_CACHE = 'hearing-core-v5';
 const AUDIO_CACHE = 'hearing-audio-v1';
 const CORE_PREFIX = 'hearing-core-';
 const CLOUD_TTS_ENDPOINT = 'https://api.streamelements.com/kappa/v2/speech';
@@ -110,6 +110,73 @@ async function cacheFirst(request, cacheName) {
   return response;
 }
 
+function parseRangeHeader(header, size) {
+  const match = /^bytes=(\d*)-(\d*)$/i.exec(String(header || '').trim());
+  if (!match) return null;
+
+  let start = match[1] ? Number(match[1]) : null;
+  let end = match[2] ? Number(match[2]) : null;
+
+  if (start === null && end === null) return null;
+  if (start === null) {
+    const suffixLength = Math.min(size, end || 0);
+    start = Math.max(0, size - suffixLength);
+    end = size - 1;
+  } else {
+    if (!Number.isFinite(start) || start < 0 || start >= size) return null;
+    if (end === null || !Number.isFinite(end) || end >= size) end = size - 1;
+  }
+
+  if (end < start) return null;
+  return { start, end };
+}
+
+async function rangedAudioResponse(request) {
+  const cache = await caches.open(AUDIO_CACHE);
+  const cached = await cache.match(request.url, { ignoreVary: true });
+
+  if (!cached) {
+    if (!self.navigator.onLine) return Response.error();
+    const fullRequest = new Request(request.url, {
+      method: 'GET',
+      mode: request.mode === 'no-cors' ? 'no-cors' : 'cors',
+      credentials: request.credentials,
+      cache: 'reload'
+    });
+    const response = await fetch(fullRequest);
+    if (response && (response.ok || response.type === 'opaque')) {
+      await cache.put(request.url, response.clone());
+    }
+    return response;
+  }
+
+  const rangeHeader = request.headers.get('range');
+  if (!rangeHeader || cached.type === 'opaque') return cached;
+
+  const buffer = await cached.arrayBuffer();
+  const range = parseRangeHeader(rangeHeader, buffer.byteLength);
+  if (!range) {
+    return new Response(null, {
+      status: 416,
+      headers: { 'Content-Range': `bytes */${buffer.byteLength}` }
+    });
+  }
+
+  const { start, end } = range;
+  const slice = buffer.slice(start, end + 1);
+  const headers = new Headers(cached.headers);
+  headers.set('Accept-Ranges', 'bytes');
+  headers.set('Content-Range', `bytes ${start}-${end}/${buffer.byteLength}`);
+  headers.set('Content-Length', String(slice.byteLength));
+  if (!headers.get('Content-Type')) headers.set('Content-Type', 'audio/mp4');
+
+  return new Response(slice, {
+    status: 206,
+    statusText: 'Partial Content',
+    headers
+  });
+}
+
 async function navigationResponse(request) {
   const cache = await caches.open(CORE_CACHE);
   try {
@@ -132,7 +199,7 @@ self.addEventListener('fetch', (event) => {
   }
 
   if ((url.origin === self.location.origin && url.pathname.startsWith(AUDIO_PATH_PREFIX)) || request.destination === 'audio') {
-    event.respondWith(cacheFirst(request, AUDIO_CACHE));
+    event.respondWith(request.headers.has('range') ? rangedAudioResponse(request) : cacheFirst(request, AUDIO_CACHE));
     return;
   }
 
