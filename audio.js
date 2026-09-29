@@ -123,6 +123,40 @@ function buildLocalAudioPath(word) {
   return filename ? `${localAudioData.basePath}/${filename}` : '';
 }
 
+const OFFLINE_FALLBACK_TTS_ENDPOINT = 'https://api.streamelements.com/kappa/v2/speech';
+const OFFLINE_FALLBACK_TTS_VOICE = 'Joanna';
+const OFFLINE_FALLBACK_SPEAK_OVERRIDES = {
+  'russia': 'Russia',
+  'rurala': 'rurala',
+  "the dentist's": "the dentist's",
+  'résumé': 'resume',
+  'fitnesscentre/center(英/美)': 'fitness center',
+  'x-ray': 'x-ray',
+  'culturalcentre/center(英/美)': 'cultural center',
+  'parkinglot(美)': 'parking lot',
+  'café': 'cafe',
+  'shoppingcentre/center(英/美)': 'shopping center',
+  't-shirt': 't-shirt',
+  'fine': 'fine',
+  'summarise/summarize.(英/美)': 'summarize',
+  'behaviour/behavior': 'behavior',
+  'trade': 'trade'
+};
+
+function offlineFallbackSpeakText(word) {
+  const key = normalizeWordKey(word);
+  if (OFFLINE_FALLBACK_SPEAK_OVERRIDES[key]) return OFFLINE_FALLBACK_SPEAK_OVERRIDES[key];
+  return normalizeSpeakText(word).replace(/[\u4e00-\u9fff]/g, ' ').replace(/\s+/g, ' ').trim();
+}
+
+function buildOfflineFallbackAudioUrl(word) {
+  const params = new URLSearchParams({
+    voice: OFFLINE_FALLBACK_TTS_VOICE,
+    text: offlineFallbackSpeakText(word),
+  });
+  return `${OFFLINE_FALLBACK_TTS_ENDPOINT}?${params.toString()}`;
+}
+
 function playRateAdjustedAudio(url, token, rate, timeoutMs = 7000) {
   return new Promise((resolve, reject) => {
     const audio = new Audio(url);
@@ -166,7 +200,7 @@ getPreferredDeviceVoice = function getFastDeviceVoice() {
     : ['google us english', 'jenny', 'aria', 'ava', 'samantha'];
   const englishVoices = deviceVoices.filter((voice) => /^en[-_]/i.test(voice.lang || ''));
   const localVoices = englishVoices.filter((voice) => voice.localService);
-  const voicePool = !navigator.onLine && localVoices.length ? localVoices : englishVoices;
+  const voicePool = !navigator.onLine ? localVoices : englishVoices;
   return voicePool
     .sort((a, b) => {
       const score = (voice) => {
@@ -192,6 +226,9 @@ speakWithDeviceVoice = function speakWithFastDeviceVoice(text, token) {
     utterance.rate = 1.02;
     utterance.volume = 1;
     const voice = getPreferredDeviceVoice();
+    if (!navigator.onLine && (!voice || !voice.localService)) {
+      return reject(new Error('offline local device voice unavailable'));
+    }
     if (voice) utterance.voice = voice;
     const timeout = window.setTimeout(() => reject(new Error('speech timeout')), 6500);
     utterance.onend = () => { window.clearTimeout(timeout); resolve(); };
@@ -215,14 +252,28 @@ playRecord = async function playInstantRecording(record) {
   setPlaying(record.id);
   warmHumanRecording(record.word);
 
-  const cachedHuman = getCachedHumanRecording(record.word).url;
+  const online = navigator.onLine;
+  const cachedHuman = online ? getCachedHumanRecording(record.word).url : '';
   const localUrl = buildLocalAudioPath(record.word);
+  const fallbackUrl = !localUrl ? buildOfflineFallbackAudioUrl(record.word) : '';
   const attempts = [];
 
-  if (cachedHuman) attempts.push(() => playRateAdjustedAudio(cachedHuman, token, HUMAN_AUDIO_PLAYBACK_RATE));
-  if (state.accent === 'en-US' && localUrl) attempts.push(() => playRateAdjustedAudio(localUrl, token, LOCAL_AUDIO_PLAYBACK_RATE));
-  attempts.push(() => speakWithDeviceVoice(record.word, token));
-  if (state.accent === 'en-GB' && localUrl) attempts.push(() => playRateAdjustedAudio(localUrl, token, LOCAL_AUDIO_PLAYBACK_RATE));
+  if (!online) {
+    if (state.accent === 'en-GB') {
+      if (getPreferredDeviceVoice()) attempts.push(() => speakWithDeviceVoice(record.word, token));
+      if (localUrl) attempts.push(() => playRateAdjustedAudio(localUrl, token, LOCAL_AUDIO_PLAYBACK_RATE));
+      else if (fallbackUrl) attempts.push(() => playRateAdjustedAudio(fallbackUrl, token, 1));
+    } else {
+      if (localUrl) attempts.push(() => playRateAdjustedAudio(localUrl, token, LOCAL_AUDIO_PLAYBACK_RATE));
+      else if (fallbackUrl) attempts.push(() => playRateAdjustedAudio(fallbackUrl, token, 1));
+      if (getPreferredDeviceVoice()) attempts.push(() => speakWithDeviceVoice(record.word, token));
+    }
+  } else {
+    if (cachedHuman) attempts.push(() => playRateAdjustedAudio(cachedHuman, token, HUMAN_AUDIO_PLAYBACK_RATE));
+    if (state.accent === 'en-US' && localUrl) attempts.push(() => playRateAdjustedAudio(localUrl, token, LOCAL_AUDIO_PLAYBACK_RATE));
+    attempts.push(() => speakWithDeviceVoice(record.word, token));
+    if (state.accent === 'en-GB' && localUrl) attempts.push(() => playRateAdjustedAudio(localUrl, token, LOCAL_AUDIO_PLAYBACK_RATE));
+  }
 
   try {
     for (const attempt of attempts) {
@@ -234,6 +285,7 @@ playRecord = async function playInstantRecording(record) {
         console.warn('pronunciation source failed', error);
       }
     }
+    if (!online) showToast('这个词的离线发音还没准备好，请联网完成离线包');
   } finally {
     finishPlaying(record, token);
   }
@@ -245,7 +297,7 @@ updateAccentButtons = function updateInstantAccentButtons() {
   if (!navigator.onLine) {
     voiceStatusEl.textContent = state.accent === 'en-US'
       ? '离线 · US 本地录音优先 · 设备声线备用'
-      : '离线 · UK 本地设备声线优先';
+      : '离线 · UK 本地设备声线优先 · US 离线包兜底';
     return;
   }
   voiceStatusEl.textContent = state.accent === 'en-US'
