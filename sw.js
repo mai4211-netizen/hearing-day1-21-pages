@@ -2,7 +2,7 @@
 
 importScripts('./data.js');
 
-const CORE_CACHE = 'hearing-core-v1';
+const CORE_CACHE = 'hearing-core-v2';
 const AUDIO_CACHE = 'hearing-audio-v1';
 const CORE_PREFIX = 'hearing-core-';
 
