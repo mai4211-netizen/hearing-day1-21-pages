@@ -238,18 +238,23 @@ function buildDictationLayer() {
           <div class="dictation-kicker">SPELLING PRACTICE</div>
           <h2 id="dictation-title">听写</h2>
         </div>
-        <button class="dictation-close" id="dictation-close" type="button" aria-label="关闭">×</button>
+        <div class="dictation-head-actions">
+          <button class="dictation-menu-btn" id="dictation-menu-btn" type="button" aria-label="听写设置" aria-controls="dictation-settings-popover" aria-expanded="false">☰</button>
+          <button class="dictation-close" id="dictation-close" type="button" aria-label="关闭">×</button>
+        </div>
+        <div class="dictation-settings-popover" id="dictation-settings-popover" hidden>
+          <div class="dictation-settings-title">听写范围</div>
+          <div class="dictation-scope" role="group" aria-label="听写范围">
+            <button class="dictation-scope-btn active" type="button" data-dictation-scope="filtered">当前筛选<small id="dictation-filtered-count">—</small></button>
+            <button class="dictation-scope-btn" type="button" data-dictation-scope="global">全局随机<small id="dictation-global-count">—</small></button>
+          </div>
+          <div class="dictation-meta">
+            <span id="dictation-scope-label">当前筛选</span>
+            <span id="dictation-today-stats">今日 0 词</span>
+          </div>
+        </div>
       </header>
       <div class="dictation-body">
-        <div class="dictation-scope" role="group" aria-label="听写范围">
-          <button class="dictation-scope-btn active" type="button" data-dictation-scope="filtered">当前筛选<small id="dictation-filtered-count">—</small></button>
-          <button class="dictation-scope-btn" type="button" data-dictation-scope="global">全局随机<small id="dictation-global-count">—</small></button>
-        </div>
-        <div class="dictation-meta">
-          <span id="dictation-scope-label">当前筛选</span>
-          <span id="dictation-today-stats">今日 0 词</span>
-        </div>
-
         <div class="dictation-card" id="dictation-card">
           <div class="dictation-progress" id="dictation-progress">准备中…</div>
           <div class="dictation-audio-wrap">
@@ -270,8 +275,19 @@ function buildDictationLayer() {
     </section>`;
   document.body.appendChild(layer);
 
+  const menuButton = document.getElementById('dictation-menu-btn');
+  const settingsPopover = document.getElementById('dictation-settings-popover');
+  function setSettingsOpen(open) {
+    settingsPopover.hidden = !open;
+    menuButton.setAttribute('aria-expanded', String(open));
+  }
+  menuButton.addEventListener('click', () => setSettingsOpen(settingsPopover.hidden));
   layer.addEventListener('click', (event) => {
-    if (event.target === layer) closeDictation();
+    if (event.target === layer) {
+      closeDictation();
+    } else if (!settingsPopover.hidden && !settingsPopover.contains(event.target) && !menuButton.contains(event.target)) {
+      setSettingsOpen(false);
+    }
   });
   document.getElementById('dictation-close').addEventListener('click', closeDictation);
   document.getElementById('dictation-audio').addEventListener('click', replayCurrent);
@@ -308,6 +324,8 @@ function buildDictationLayer() {
     layer.querySelectorAll('.dictation-scope-btn').forEach((item) => item.classList.toggle('active', item === button));
     updateDictationMeta();
     nextDictationWord();
+    settingsPopover.hidden = true;
+    menuButton.setAttribute('aria-expanded', 'false');
   });
 }
 
@@ -441,6 +459,8 @@ async function openDictation() {
   buildDictationLayer();
   const layer = document.getElementById('dictation-layer');
   layer.hidden = false;
+  document.getElementById('dictation-settings-popover').hidden = true;
+  document.getElementById('dictation-menu-btn').setAttribute('aria-expanded', 'false');
   document.body.classList.add('dictation-active');
   dictationUnobscuredHeight = Math.max(window.innerHeight, window.visualViewport?.height || 0);
   syncDictationViewport();
