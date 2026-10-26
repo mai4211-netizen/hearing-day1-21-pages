@@ -256,7 +256,7 @@ function buildDictationLayer() {
             <button class="dictation-audio" id="dictation-audio" type="button" aria-label="播放单词">▶</button>
             <div class="dictation-audio-hint">点击可重复播放</div>
           </div>
-          <input class="dictation-input" id="dictation-input" type="text" autocomplete="off" autocapitalize="none" spellcheck="false" placeholder="输入你听到的英文" />
+          <input class="dictation-input" id="dictation-input" type="text" inputmode="text" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" aria-autocomplete="none" enterkeyhint="done" placeholder="输入你听到的英文" />
           <div class="dictation-actions" id="dictation-actions">
             <button class="dictation-btn secondary" id="dictation-skip" type="button">不会 / 跳过</button>
             <button class="dictation-btn primary" id="dictation-check" type="button">检查</button>
@@ -279,6 +279,7 @@ function buildDictationLayer() {
   document.getElementById('dictation-skip').addEventListener('click', () => submitDictation(true));
   document.getElementById('dictation-next').addEventListener('click', nextDictationWord);
   const answerInput = document.getElementById('dictation-input');
+  answerInput.addEventListener('focus', () => window.requestAnimationFrame(syncDictationViewport));
   answerInput.addEventListener('beforeinput', (event) => {
     if (dictationState.answered) event.preventDefault();
   });
@@ -310,6 +311,8 @@ function buildDictationLayer() {
   });
 }
 
+let dictationUnobscuredHeight = 0;
+
 function syncDictationViewport() {
   const layer = document.getElementById('dictation-layer');
   if (!layer || layer.hidden) return;
@@ -318,8 +321,11 @@ function syncDictationViewport() {
   const visibleHeight = mobile ? (viewport ? viewport.height : window.innerHeight) : window.innerHeight;
   layer.style.setProperty('--dictation-visible-height', mobile ? `${Math.round(visibleHeight)}px` : '');
   layer.style.setProperty('--dictation-visible-top', mobile ? `${Math.round(viewport?.offsetTop || 0)}px` : '');
-  layer.classList.toggle('dictation-keyboard', mobile && window.innerHeight - visibleHeight > 140);
-  layer.classList.toggle('dictation-compact', mobile && visibleHeight < 455);
+  const referenceHeight = Math.max(window.innerHeight, dictationUnobscuredHeight);
+  const keyboardVisible = mobile && referenceHeight - visibleHeight > 120;
+  layer.classList.toggle('dictation-keyboard', keyboardVisible);
+  layer.classList.toggle('dictation-compact', mobile && visibleHeight < 430);
+  // A full-height backdrop remains behind the resized foreground, hiding the word list.
 }
 
 window.addEventListener('resize', syncDictationViewport);
@@ -374,6 +380,7 @@ function nextDictationWord() {
   input.classList.remove('is-correct', 'is-wrong');
   document.getElementById('dictation-feedback').hidden = true;
   document.getElementById('dictation-feedback').className = 'dictation-feedback';
+  document.getElementById('dictation-layer').classList.remove('dictation-answered');
   document.getElementById('dictation-check').hidden = false;
   document.getElementById('dictation-skip').hidden = false;
   document.getElementById('dictation-next').hidden = true;
@@ -414,6 +421,7 @@ function submitDictation(skip) {
   const feedback = document.getElementById('dictation-feedback');
   feedback.hidden = false;
   feedback.className = `dictation-feedback ${correct ? 'correct' : 'wrong'}`;
+  document.getElementById('dictation-layer').classList.add('dictation-answered');
 
   if (correct) {
     feedback.innerHTML = `<strong>正确</strong><span class="dictation-answer">${escapeHtml(record.word)}</span><span class="dictation-meaning">${escapeHtml(record.meaning || '')}</span>`;
@@ -433,6 +441,8 @@ async function openDictation() {
   buildDictationLayer();
   const layer = document.getElementById('dictation-layer');
   layer.hidden = false;
+  document.body.classList.add('dictation-active');
+  dictationUnobscuredHeight = Math.max(window.innerHeight, window.visualViewport?.height || 0);
   syncDictationViewport();
   document.body.style.overflow = 'hidden';
   try {
@@ -448,7 +458,9 @@ function closeDictation() {
   const layer = document.getElementById('dictation-layer');
   if (!layer) return;
   layer.hidden = true;
+  document.body.classList.remove('dictation-active');
   document.body.style.overflow = '';
+  dictationUnobscuredHeight = 0;
   if (typeof stopPlayback === 'function') stopPlayback();
 }
 
