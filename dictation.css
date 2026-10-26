@@ -525,6 +525,33 @@
   }
   .dictation-layer.dictation-answered .dictation-audio-hint { display: none; }
 
+  /* During answer review, align the typed answer and Next in one row.
+     The input remains focused so iOS keeps the keyboard visible. */
+  .dictation-layer.dictation-answered .dictation-card {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(112px, 0.43fr);
+    grid-template-rows: auto auto auto minmax(0, 1fr);
+    column-gap: 9px;
+    row-gap: 5px;
+  }
+  .dictation-layer.dictation-answered .dictation-progress,
+  .dictation-layer.dictation-answered .dictation-audio-wrap,
+  .dictation-layer.dictation-answered .dictation-feedback { grid-column: 1 / -1; }
+  .dictation-layer.dictation-answered .dictation-progress { grid-row: 1; }
+  .dictation-layer.dictation-answered .dictation-audio-wrap { grid-row: 2; }
+  .dictation-layer.dictation-answered .dictation-input { grid-row: 3; grid-column: 1; width: 100%; }
+  .dictation-layer.dictation-answered .dictation-actions {
+    grid-row: 3;
+    grid-column: 2;
+    min-width: 0;
+    margin-top: 0;
+  }
+  .dictation-layer.dictation-answered .dictation-feedback {
+    grid-row: 4;
+    min-height: 0;
+    margin-top: 2px;
+  }
+
   /* Very short iPhone viewports: keep a readable input and result, not a squashed stack. */
   .dictation-layer.dictation-compact .dictation-head { min-height: 43px; padding: 5px 12px; }
   .dictation-layer.dictation-compact .dictation-autoplay-row { top: 5px; }
