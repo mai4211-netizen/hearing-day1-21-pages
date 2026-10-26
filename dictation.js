@@ -278,7 +278,23 @@ function buildDictationLayer() {
   document.getElementById('dictation-check').addEventListener('click', () => submitDictation(false));
   document.getElementById('dictation-skip').addEventListener('click', () => submitDictation(true));
   document.getElementById('dictation-next').addEventListener('click', nextDictationWord);
-  document.getElementById('dictation-input').addEventListener('keydown', (event) => {
+  const answerInput = document.getElementById('dictation-input');
+  answerInput.addEventListener('beforeinput', (event) => {
+    if (dictationState.answered) event.preventDefault();
+  });
+  // Prevent tapping actions from transferring focus away from the text field.
+  // On iOS touchstart + a synchronous click keeps the on-screen keyboard open.
+  const actions = document.getElementById('dictation-actions');
+  actions.addEventListener('touchstart', (event) => {
+    const button = event.target.closest('button');
+    if (!button || window.innerWidth > 760 || document.activeElement !== answerInput || !event.cancelable) return;
+    event.preventDefault();
+    button.click();
+  }, { passive: false });
+  actions.addEventListener('mousedown', (event) => {
+    if (window.innerWidth <= 760 && document.activeElement === answerInput) event.preventDefault();
+  });
+  answerInput.addEventListener('keydown', (event) => {
     if (event.key === 'Enter') {
       event.preventDefault();
       dictationState.answered ? nextDictationWord() : submitDictation(false);
@@ -293,6 +309,22 @@ function buildDictationLayer() {
     nextDictationWord();
   });
 }
+
+function syncDictationViewport() {
+  const layer = document.getElementById('dictation-layer');
+  if (!layer || layer.hidden) return;
+  const mobile = window.innerWidth <= 760;
+  const viewport = window.visualViewport;
+  const visibleHeight = mobile ? (viewport ? viewport.height : window.innerHeight) : window.innerHeight;
+  layer.style.setProperty('--dictation-visible-height', mobile ? `${Math.round(visibleHeight)}px` : '');
+  layer.style.setProperty('--dictation-visible-top', mobile ? `${Math.round(viewport?.offsetTop || 0)}px` : '');
+  layer.classList.toggle('dictation-keyboard', mobile && window.innerHeight - visibleHeight > 140);
+  layer.classList.toggle('dictation-compact', mobile && visibleHeight < 455);
+}
+
+window.addEventListener('resize', syncDictationViewport);
+window.visualViewport?.addEventListener('resize', syncDictationViewport);
+window.visualViewport?.addEventListener('scroll', syncDictationViewport);
 
 function updateDictationMeta() {
   ensureToday();
@@ -347,10 +379,9 @@ function nextDictationWord() {
   document.getElementById('dictation-next').hidden = true;
   updateDictationMeta();
 
-  window.setTimeout(() => {
-    replayCurrent();
-    input.focus({ preventScroll: true });
-  }, 80);
+  // Focus synchronously during the Next tap; iOS otherwise closes the keyboard.
+  input.focus({ preventScroll: true });
+  window.setTimeout(replayCurrent, 80);
 }
 
 function replayCurrent() {
@@ -375,7 +406,9 @@ function submitDictation(skip) {
   if (!correct) dictationState.sessionWrong += 1;
   recordResult(record, correct);
 
-  input.disabled = true;
+  // Disabling (or making readonly) the focused input dismisses the iOS keyboard.
+  // Keep it enabled and block edits while the answer is visible.
+  input.focus({ preventScroll: true });
   input.classList.toggle('is-correct', correct);
   input.classList.toggle('is-wrong', !correct);
   const feedback = document.getElementById('dictation-feedback');
@@ -400,6 +433,7 @@ async function openDictation() {
   buildDictationLayer();
   const layer = document.getElementById('dictation-layer');
   layer.hidden = false;
+  syncDictationViewport();
   document.body.style.overflow = 'hidden';
   try {
     await waitForRecords();
