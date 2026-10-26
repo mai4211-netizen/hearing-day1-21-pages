@@ -256,7 +256,7 @@ function buildDictationLayer() {
             <button class="dictation-audio" id="dictation-audio" type="button" aria-label="播放单词">▶</button>
             <div class="dictation-audio-hint">点击可重复播放</div>
           </div>
-          <input class="dictation-input" id="dictation-input" type="text" inputmode="text" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" aria-autocomplete="none" enterkeyhint="done" placeholder="输入你听到的英文" />
+          <input class="dictation-input" id="dictation-input" type="text" inputmode="text" autocomplete="off" autocorrect="off" writingsuggestions="false" autocapitalize="off" spellcheck="false" aria-autocomplete="none" enterkeyhint="done" placeholder="输入你听到的英文" />
           <div class="dictation-actions" id="dictation-actions">
             <button class="dictation-btn secondary" id="dictation-skip" type="button">不会 / 跳过</button>
             <button class="dictation-btn primary" id="dictation-check" type="button">检查</button>
