@@ -331,24 +331,64 @@
   .dictation-diff-word { font-size: 18px; }
 }
 
-/* Mobile spelling practice: a solid full-screen sheet and a separate keyboard-aware content area. */
+
+/* Both desktop and mobile: practice options live in a menu, not the work area. */
+.dictation-head-actions { display: flex; gap: 8px; flex: 0 0 auto; align-items: center; }
+.dictation-menu-btn {
+  display: grid;
+  place-items: center;
+  width: 38px;
+  height: 38px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  color: var(--muted);
+  background: var(--surface-soft);
+  font-size: 20px;
+  line-height: 1;
+}
+.dictation-settings-popover {
+  position: absolute;
+  top: calc(100% - 3px);
+  right: 16px;
+  z-index: 12;
+  width: min(360px, calc(100vw - 28px));
+  padding: 14px;
+  border: 1px solid var(--line-strong);
+  border-radius: 15px;
+  background: #fff;
+  box-shadow: 0 16px 44px rgba(20, 32, 51, 0.18);
+}
+.dictation-settings-popover[hidden] { display: none; }
+.dictation-settings-title {
+  margin-bottom: 9px;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 850;
+}
+.dictation-settings-popover .dictation-meta {
+  margin-top: 10px;
+  line-height: 1.3;
+}
+.dictation-settings-popover .dictation-autoplay-row { margin-top: 11px; }
+
+/* The solid backdrop covers the entire document, while the sheet follows
+   the actually visible area above the iOS keyboard. */
 @media (max-width: 760px) {
-  /* The backdrop stays full height. Only the foreground panel follows VisualViewport. */
   .dictation-layer {
     position: fixed;
     inset: 0;
+    display: block;
     width: 100%;
     height: 100%;
-    display: block;
     padding: 0;
     overflow: hidden;
     background: #fff;
     backdrop-filter: none;
   }
+  .dictation-layer[hidden] { display: none; }
   body.dictation-active { background: #fff; }
   body.dictation-active .app-shell,
   body.dictation-active .toast { visibility: hidden; }
-  .dictation-layer[hidden] { display: none; }
   .dictation-panel {
     position: absolute;
     top: var(--dictation-visible-top, 0px);
@@ -369,87 +409,53 @@
     flex: 0 0 auto;
     align-items: center;
     justify-content: space-between;
-    min-height: 52px;
+    min-height: 46px;
     gap: 10px;
-    padding: 9px 14px;
+    padding: 6px 12px;
     background: #fff;
   }
   .dictation-kicker { display: none; }
-  .dictation-head h2 { font-size: 20px; line-height: 1.2; }
-  .dictation-close {
-    width: 36px;
-    height: 36px;
-    border-radius: 11px;
+  .dictation-head h2 { font-size: 19px; line-height: 1.2; }
+  .dictation-close,
+  .dictation-menu-btn {
+    width: 35px;
+    height: 35px;
+    border-radius: 10px;
   }
+  .dictation-menu-btn { font-size: 20px; }
+  .dictation-settings-popover {
+    top: calc(100% - 1px);
+    right: 10px;
+    padding: 13px;
+  }
+  .dictation-settings-popover .dictation-scope { gap: 5px; padding: 4px; }
+  .dictation-settings-popover .dictation-scope-btn { min-height: 39px; font-size: 12px; }
+  .dictation-settings-popover .dictation-scope-btn small {
+    display: block;
+    font-size: 10px;
+    margin-top: 2px;
+  }
+  .dictation-settings-popover .dictation-meta { gap: 6px; margin: 10px 2px 0; font-size: 10px; }
+  .dictation-settings-popover .dictation-autoplay-row { margin-top: 10px; }
   .dictation-body {
     display: flex;
     flex: 1 1 auto;
     flex-direction: column;
     min-height: 0;
-    padding: 0 14px max(10px, env(safe-area-inset-bottom));
-    overflow: hidden;
+    overflow-y: auto; /* whole page is the fallback, not an inner answer scroller */
+    overscroll-behavior: contain;
+    padding: 0 12px max(9px, env(safe-area-inset-bottom));
     background: #fff;
   }
   .dictation-layer.dictation-keyboard .dictation-body { padding-bottom: 7px; }
-  .dictation-scope {
-    flex: 0 0 auto;
-    gap: 6px;
-    padding: 4px;
-    border-radius: 13px;
-  }
-  .dictation-scope-btn {
-    min-height: 39px;
-    padding: 4px 6px;
-    border-radius: 9px;
-    font-size: 12px;
-  }
-  .dictation-scope-btn small {
-    display: inline;
-    margin: 0 0 0 5px;
-    font-size: 10px;
-  }
-  .dictation-meta {
-    flex: 0 0 auto;
-    gap: 6px;
-    margin: 8px 2px 0;
-    font-size: 10px;
-    line-height: 1.2;
-  }
-  .dictation-meta span { min-width: 0; }
-  /* Place the secondary autoplay control beside Close instead of using a whole extra row. */
-  .dictation-layer .dictation-autoplay-row {
-    position: absolute;
-    top: 10px;
-    right: 60px;
-    z-index: 3;
-    display: flex;
-    width: auto;
-    min-height: 34px;
-    gap: 5px;
-    margin: 0;
-    padding: 4px 7px;
-    border-radius: 10px;
-    font-size: 0;
-    line-height: 1;
-  }
-  .dictation-layer .dictation-autoplay-row span::after {
-    content: "自动播放";
-    font-size: 11px;
-  }
-  .dictation-layer .dictation-autoplay-row span { font-size: 0; }
-  .dictation-layer .dictation-autoplay-toggle { width: 36px; height: 20px; }
-  .dictation-layer .dictation-autoplay-toggle::after { width: 14px; height: 14px; }
-  .dictation-layer .dictation-autoplay-toggle.active::after { transform: translateX(16px); }
-
-  /* Clear separation: progress + audio / input + action / answer area. */
   .dictation-card {
     display: flex;
-    flex: 1 1 auto;
+    flex: 0 0 auto;
     flex-direction: column;
+    margin-top: 7px;
+    padding: 0;
     min-height: 0;
-    margin-top: 10px;
-    padding: 8px 0 0;
-    overflow: hidden;
+    overflow: visible;
     border: 0;
     border-radius: 0;
     background: #fff;
@@ -459,117 +465,109 @@
   .dictation-audio-wrap {
     flex: 0 0 auto;
     align-content: center;
-    min-height: 80px;
-    margin: 9px 0 12px;
-    border-radius: 16px;
+    min-height: 66px;
+    margin: 8px 0 9px;
+    border-radius: 13px;
     background: #f3f6fc;
   }
   .dictation-audio {
-    width: 54px;
-    height: 54px;
-    font-size: 23px;
-    box-shadow: 0 8px 16px rgba(53,111,246,0.20);
+    width: 48px;
+    height: 48px;
+    font-size: 20px;
+    box-shadow: 0 7px 14px rgba(53, 111, 246, 0.20);
   }
-  .dictation-audio-hint { margin-top: 5px; font-size: 10px; }
+  .dictation-audio-hint { display: none; }
   .dictation-input {
     flex: 0 0 auto;
-    height: 45px;
-    padding: 0 12px;
-    border-radius: 12px;
+    height: 43px;
+    padding: 0 10px;
+    border-radius: 11px;
     font-size: 16px;
   }
-  .dictation-actions {
-    flex: 0 0 auto;
-    gap: 8px;
-    margin-top: 10px;
-  }
-  .dictation-btn {
-    min-height: 43px;
-    border-radius: 12px;
-    font-size: 13px;
-  }
+  .dictation-actions { flex: 0 0 auto; gap: 7px; margin-top: 8px; }
+  .dictation-btn { min-height: 42px; border-radius: 11px; font-size: 13px; }
   .dictation-feedback {
-    flex: 1 1 auto;
-    min-height: 0;
-    overflow-y: auto;
-    overscroll-behavior: contain;
-    margin-top: 11px;
-    padding: 11px 12px;
+    flex: 0 0 auto;
+    min-height: auto;
+    max-height: none;
+    height: auto;
+    overflow: visible; /* always show the complete spelling comparison */
+    margin-top: 8px;
+    padding: 9px 10px;
     border-radius: 12px;
     font-size: 12px;
-    line-height: 1.4;
+    line-height: 1.3;
   }
   .dictation-feedback[hidden] { display: none; }
   .dictation-answer { font-size: 17px; line-height: 1.3; }
   .dictation-meaning { font-size: 11px; }
   .dictation-diff {
     gap: 5px;
-    margin: 8px 0 6px;
-    padding: 8px;
-    border-radius: 10px;
+    margin: 6px 0 5px;
+    padding: 7px;
+    border-radius: 9px;
   }
-  .dictation-diff-row { grid-template-columns: 40px minmax(0, 1fr); gap: 6px; }
-  .dictation-diff-word { font-size: clamp(13px, 4vw, 17px); line-height: 1.4; }
-  .dictation-diff-label { font-size: 10px; }
+  .dictation-diff-row { grid-template-columns: 40px minmax(0, 1fr); gap: 5px; }
+  .dictation-diff-word {
+    font-size: clamp(12px, 3.7vw, 16px);
+    line-height: 1.25;
+    flex-wrap: wrap;
+    overflow-wrap: anywhere;
+  }
+  .dictation-diff-label { font-size: 9px; }
   .dictation-empty { flex: 1 1 auto; min-height: 0; overflow: auto; }
 
-  /* After checking, give spelling comparison priority over the playback illustration. */
-  .dictation-layer.dictation-answered .dictation-audio-wrap {
-    min-height: 55px;
-    margin: 5px 0 8px;
-  }
-  .dictation-layer.dictation-answered .dictation-audio {
-    width: 40px;
-    height: 40px;
-    font-size: 18px;
-  }
-  .dictation-layer.dictation-answered .dictation-audio-hint { display: none; }
-
-  /* During answer review, align the typed answer and Next in one row.
-     The input remains focused so iOS keeps the keyboard visible. */
+  /* Review state is content-sized, not a grid track that clips the answer. */
   .dictation-layer.dictation-answered .dictation-card {
     display: grid;
-    grid-template-columns: minmax(0, 1fr) minmax(112px, 0.43fr);
-    grid-template-rows: auto auto auto minmax(0, 1fr);
-    column-gap: 9px;
+    grid-template-columns: minmax(0, 1fr) minmax(100px, .45fr);
+    grid-template-rows: auto auto auto auto;
+    align-content: start;
+    column-gap: 8px;
     row-gap: 5px;
   }
   .dictation-layer.dictation-answered .dictation-progress,
   .dictation-layer.dictation-answered .dictation-audio-wrap,
   .dictation-layer.dictation-answered .dictation-feedback { grid-column: 1 / -1; }
   .dictation-layer.dictation-answered .dictation-progress { grid-row: 1; }
-  .dictation-layer.dictation-answered .dictation-audio-wrap { grid-row: 2; }
-  .dictation-layer.dictation-answered .dictation-input { grid-row: 3; grid-column: 1; width: 100%; }
-  .dictation-layer.dictation-answered .dictation-actions {
-    grid-row: 3;
-    grid-column: 2;
-    min-width: 0;
-    margin-top: 0;
+  .dictation-layer.dictation-answered .dictation-audio-wrap {
+    grid-row: 2;
+    min-height: 47px;
+    margin: 4px 0 5px;
   }
+  .dictation-layer.dictation-answered .dictation-audio {
+    width: 38px;
+    height: 38px;
+    font-size: 17px;
+  }
+  .dictation-layer.dictation-answered .dictation-input { grid-column: 1; grid-row: 3; width: 100%; }
+  .dictation-layer.dictation-answered .dictation-actions {
+    grid-column: 2;
+    grid-row: 3;
+    min-width: 0;
+    margin: 0;
+  }
+  .dictation-layer.dictation-answered .dictation-btn.next { width: 100%; }
   .dictation-layer.dictation-answered .dictation-feedback {
     grid-row: 4;
-    min-height: 0;
     margin-top: 2px;
   }
 
-  /* Very short iPhone viewports: keep a readable input and result, not a squashed stack. */
-  .dictation-layer.dictation-compact .dictation-head { min-height: 43px; padding: 5px 12px; }
-  .dictation-layer.dictation-compact .dictation-autoplay-row { top: 5px; }
-  .dictation-layer.dictation-compact .dictation-scope-btn { min-height: 34px; }
-  .dictation-layer.dictation-compact .dictation-meta { margin-top: 5px; }
-  .dictation-layer.dictation-compact .dictation-card { margin-top: 5px; padding-top: 4px; }
-  .dictation-layer.dictation-compact .dictation-audio-wrap {
-    min-height: 53px;
-    margin: 4px 0 7px;
+  /* Extra-short visible heights: prioritize readable spelling results. */
+  .dictation-layer.dictation-compact .dictation-head { min-height: 42px; padding: 4px 12px; }
+  .dictation-layer.dictation-compact .dictation-card { margin-top: 4px; }
+  .dictation-layer.dictation-compact .dictation-audio-wrap { min-height: 49px; margin: 4px 0 6px; }
+  .dictation-layer.dictation-compact .dictation-audio { width: 40px; height: 40px; font-size: 18px; }
+  .dictation-layer.dictation-compact .dictation-input { height: 40px; }
+  .dictation-layer.dictation-compact .dictation-btn { min-height: 40px; }
+  .dictation-layer.dictation-compact .dictation-actions { margin-top: 6px; }
+  .dictation-layer.dictation-compact .dictation-feedback { margin-top: 5px; padding: 7px 8px; }
+  .dictation-layer.dictation-compact .dictation-diff { margin: 4px 0; padding: 5px; }
+  .dictation-layer.dictation-compact.dictation-answered .dictation-audio-wrap {
+    min-height: 41px;
+    margin: 2px 0 4px;
   }
-  .dictation-layer.dictation-compact .dictation-audio { width: 43px; height: 43px; font-size: 19px; }
-  .dictation-layer.dictation-compact .dictation-audio-hint { display: none; }
-  .dictation-layer.dictation-compact .dictation-input { height: 42px; }
-  .dictation-layer.dictation-compact .dictation-btn { min-height: 39px; }
-  .dictation-layer.dictation-compact .dictation-actions { margin-top: 7px; }
-  .dictation-layer.dictation-compact .dictation-feedback {
-    margin-top: 7px;
-    padding: 8px 9px;
+  .dictation-layer.dictation-compact.dictation-answered .dictation-audio {
+    width: 34px; height: 34px; font-size: 16px;
   }
-  .dictation-layer.dictation-compact .dictation-diff { margin: 4px 0; padding: 6px; }
 }
