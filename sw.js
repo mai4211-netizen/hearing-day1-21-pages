@@ -2,7 +2,7 @@
 
 importScripts('./data.js');
 
-const CORE_CACHE = 'hearing-core-v5';
+const CORE_CACHE = 'hearing-core-v6';
 const AUDIO_CACHE = 'hearing-audio-v1';
 const CORE_PREFIX = 'hearing-core-';
 const CLOUD_TTS_ENDPOINT = 'https://api.streamelements.com/kappa/v2/speech';
